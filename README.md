@@ -1,6 +1,6 @@
-# Team Intel Agent 🤖
+# Axeng — Engineering Manager Accelerator 🤖
 
-**Autonomous engineering intelligence agent** — monitors GitHub, Linear, and team activity, generates weekly reports, and syncs to Obsidian.
+**Autonomous engineering intelligence agent** — monitors GitHub, Linear, and team activity, generates daily briefs, and keeps your Obsidian vault in sync.
 
 Built for engineering leaders who want to know what's shipping, who's blocked, and where the roadmap stands — without asking.
 
@@ -8,36 +8,43 @@ Built for engineering leaders who want to know what's shipping, who's blocked, a
 
 ## Features
 
-- 📊 **Weekly Team Report** — HTML email every Friday with:
-  - Per-project roadmap status (from Linear)
-  - MVP of the week (F1 podium scoring)
-  - Per-person commit breakdown with estimated hours
-  - Roadmap contribution analysis
-  - Business summary per Linear project
+### 🏃 Daily Standup Brief (Mon–Fri 07:30)
+- What shipped yesterday
+- Unassigned / stale Linear issues (blockers)
+- PRs waiting >48h for review
+- Who's OOO today
 
-- 🔄 **Daily Sync** — fetches GitHub activity → stores in Obsidian vault
-- 🧠 **Query Engine** — ask questions about your team in natural language:
-  - "Who's been touching the backend repo this week?"
-  - "Show me the last PRs from João"
-  - "What blockers do we have in Linear?"
-- 📋 **Linear Integration** — sync issues, post weekly updates to projects
-- 🤖 **Idempotent writes** — running the report twice produces one clean update
+### 📋 1:1 Pre-reads (before each 1:1)
+-对方的 open Linear issues + priority
+- Their commits this week
+- Pending PRs awaiting their review
+- Last 1:1 notes from Obsidian
+- Suggested talking points
+- Sprint velocity (14-day)
+
+### 📊 Weekly Team Report (Friday 17:00)
+- Per-project roadmap status (from Linear)
+- MVP of the week (F1 podium scoring)
+- Per-person commit breakdown with estimated hours
+- Roadmap contribution analysis
+- Business summary posted to each Linear project
+
+### 🔄 Daily Vault Sync
+- Fetches GitHub activity → stores in Obsidian vault
+- Builds team member profiles over time
+
+### 🧠 Query Engine
+- "Who's been touching the backend repo this week?"
+- "Show me the last PRs from João"
+- "What blockers do we have in Linear?"
+
+### 🔧 Linear Integration
+- Sync issues, post weekly updates to projects
+- Idempotent writes — running the report twice produces one clean update
 
 ---
 
 ## Quick Start
-
-### 1. Clone / install
-
-```bash
-git clone https://github.com/ruimachado-orbit/team-intel.git
-cd team-intel
-pip install -r requirements.txt
-```
-
-### 2. Configure
-
-```bash
 cp config/config.example.yaml config/config.yaml
 # Edit config.yaml with your team, repos, and credentials
 ```

@@ -1,0 +1,109 @@
+# ═══════════════════════════════════════════════════════════════
+# Team Intel — Configuration Template
+# Copy this file to config/config.yaml and fill in your values.
+# All settings are used by weekly_report.py and project_map.py.
+# ═══════════════════════════════════════════════════════════════
+
+# ───────────────────────────────────────────────────────────────
+# EMAIL
+# ───────────────────────────────────────────────────────────────
+email:
+  # Comma-separated or list of recipient addresses
+  recipients:
+    - "team@example.com"
+
+  # "From" address shown in the email header
+  from: "team@example.com"
+
+  # Path to the google_api.py Gmail helper script
+  # The script should support: gmail send --to --subject --body --html
+  gmail_script: "~/.hermes/skills/productivity/google-workspace/scripts/google_api.py"
+
+
+# ───────────────────────────────────────────────────────────────
+# GITHUB
+# ───────────────────────────────────────────────────────────────
+github:
+  # GitHub organizations to scan for repos
+  orgs:
+    - "MyOrg"
+
+  # Specific repos to always include (org/repo format)
+  repos: []
+
+  # Map raw GitHub usernames to display names used in reports
+  # Key: GitHub login, Value: friendly display name
+  name_map:
+    "johndoe": "John Doe"
+    "jane_dev": "Jane Developer"
+    # Example:
+    # "github_user": "Display Name"
+
+  # Usernames to exclude from all reports (ex-members, bots, etc.)
+  ex_members:
+    - "former_employee"
+    - "bot_account"
+
+
+# ───────────────────────────────────────────────────────────────
+# LINEAR
+# ───────────────────────────────────────────────────────────────
+linear:
+  # Linear API key — stored in ~/.hermes/.env as LINEAR_API_KEY
+  # api_key: "lin_xxxx"  # Not needed here; script reads from .env
+
+  # Number of issues per project to fetch for roadmap cards
+  issues_per_project: 50
+
+  # Map of Linear project names → their Linear project IDs
+  # Get IDs from Linear URL: app.linear.app/<workspace>/project/<slug>/<id>
+  project_ids:
+    "Project Alpha": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    "Project Beta":  "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+    # Example:
+    # "My Project": "947f286c-ec5d-4087-a510-285df0ebcd71"
+
+  # Map of Linear project names → associated GitHub repos and owner
+  # Each entry: "Linear Project Name" → { "repos": ["org/repo", ...], "owner": "Full Name" }
+  projects:
+    "Project Alpha":
+      repos:
+        - "MyOrg/frontend"
+      owner: "John Doe"
+
+    "Project Beta":
+      repos:
+        - "MyOrg/backend"
+        - "MyOrg/shared-lib"
+      owner: "Jane Developer"
+
+    # Full example:
+    # "My Project":
+    #   repos:
+    #     - "org/repo-name"
+    #     - "org/another-repo"
+    #   owner: "Full Name of Project Owner"
+
+
+# ───────────────────────────────────────────────────────────────
+# REPORTING
+# ───────────────────────────────────────────────────────────────
+reporting:
+  # Day of week that the report runs (0=Monday, 4=Friday)
+  # The report covers the previous Sat–Fri week
+  weekday: 4
+
+  # Timezone for week boundary calculations
+  timezone: "Europe/Lisbon"
+
+  # Output directory for saved HTML reports
+  output_dir: "~/.hermes/scripts/team-intel/reports"
+
+  # Include the MVP podium section in the report
+  show_mvp: true
+
+  # Include roadmap contribution analysis per project card
+  show_roadmap_analysis: true
+
+  # Post weekly updates to Linear projects (idempotent — overwrites previous week's update)
+  post_linear_updates: true

@@ -42,6 +42,19 @@ Built for engineering leaders who want to know what's shipping, who's blocked, a
 - Sync issues, post weekly updates to projects
 - Idempotent writes — running the report twice produces one clean update
 
+### 📈 Sprint Health (Friday 16:00)
+- Per-project health score (0–100) with deductions for stale, at-risk, silent
+- Burn rate: closed vs. active issues
+- Scope creep detection: issues added mid-sprint
+- Stale issue list across all projects
+
+### 🔭 Risk Radar (Friday 16:00)
+- Quiet repos: no commits in 10+ days
+- Stalled projects: >3 in-progress with no update in 5+ days
+- Overloaded members: 5+ open issues, <2 completed in 14d
+- Overdue issues: past due date
+- Orphaned PRs: open >7 days, no reviewers assigned
+
 ---
 
 ## Quick Start
@@ -89,6 +102,10 @@ team-intel/
 ├── src/
 │   ├── config.py              # Config loader
 │   ├── weekly_report.py       # Weekly report + Linear updates (main entry)
+│   ├── standup-brief.py       # Daily standup brief (07:30 Mon-Fri)
+│   ├── one-on-one-pre-read.py # 1:1 pre-read generator
+│   ├── sprint-health.py       # Sprint health scores (Friday)
+│   ├── risk-radar.py          # Risk radar scan (Friday)
 │   ├── team_sync.py           # Daily sync engine → Obsidian
 │   ├── orchestrator.py         # Natural language query router
 │   ├── tools/

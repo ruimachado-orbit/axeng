@@ -93,3 +93,33 @@ def vault_path() -> str:
 
 def team_members() -> list:
     return get("team", [])
+
+
+# ── LLM / Provider Settings ───────────────────────────────────────────────────
+def llm_provider_order() -> list:
+    order = os.environ.get("LLM_PROVIDER_ORDER", "")
+    if order:
+        return [p.strip() for p in order.split(",") if p.strip()]
+    return get("llm.provider_order", [
+        "anthropic", "openai", "opencode", "groq",
+        "openrouter", "google", "ollama", "lmstudio",
+    ])
+
+
+def llm_default_provider() -> str:
+    return get("llm.default_provider", "anthropic")
+
+
+def llm_max_tokens() -> int:
+    return get("llm.max_tokens", int(os.environ.get("LLM_MAX_TOKENS", "4096")))
+
+
+def llm_temperature() -> float:
+    val = get("llm.temperature")
+    if val is not None:
+        return float(val)
+    return float(os.environ.get("LLM_TEMPERATURE", "0.7"))
+
+
+def llm_model(provider: str) -> str:
+    return get(f"llm.{provider}.model") or os.environ.get(f"{provider.upper()}_MODEL", "")

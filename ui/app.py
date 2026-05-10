@@ -8,10 +8,11 @@ from datetime import datetime
 
 import streamlit as st
 
-# ── Paths ─────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent.parent
 sys.path.insert(0, str(SCRIPT_DIR / "src"))
-CONFIG_EXAMPLE = SCRIPT_DIR / "config" / "config.yaml.example"
+from llm_gateway import status as llm_status, PROVIDERS, get_available_providers
+
+# ── Paths ─────────────────────────────────────────────────────────
 CONFIG_FILE = SCRIPT_DIR / "config" / "config.yaml"
 VAULT_DIR = SCRIPT_DIR / "vault"
 REPORTS_DIR = SCRIPT_DIR / "reports"
@@ -47,7 +48,7 @@ st.caption(f"Session: {datetime.now().strftime('%Y-%m-%d %H:%M')} · Lisbon time
 # ── Sidebar nav ──────────────────────────────────────────────────
 page = st.sidebar.radio(
     "Navigate",
-    ["📊 Dashboard", "⚙️ Configuration", "📋 Reports", "👥 Team", "🔧 Run Reports"],
+    ["📊 Dashboard", "🧠 LLM Settings", "⚙️ Configuration", "📋 Reports", "👥 Team", "🔧 Run Reports"],
     index=0,
 )
 
@@ -79,6 +80,30 @@ if page == "📊 Dashboard":
         col3.metric("Projects configured", "0")
 
     st.divider()
+
+    # LLM Provider status
+    st.subheader("🧠 LLM Providers")
+    with st.container():
+        prov_cols = st.columns(min(len(PROVIDERS), 4))
+        prov_status = llm_status()
+        available_count = sum(1 for v in prov_status.values() if v["available"])
+        st.caption(f"{available_count}/{len(prov_status)} providers configured")
+
+        for i, (pid, info) in enumerate(PROVIDERS.items()):
+            col = prov_cols[i % len(prov_cols)]
+            s = prov_status.get(pid, {})
+            icon = "🟢" if s.get("available") else "⚪"
+            name = info["name"].split("(")[0].strip()
+            local_tag = " (local)" if info.get("is_local") else ""
+            if s.get("is_running") and not s.get("has_api_key"):
+                subtitle = "● running"
+            elif s.get("has_api_key"):
+                subtitle = "✓ key set"
+            else:
+                subtitle = "○ not set"
+            with col:
+                st.markdown(f"**{icon} {name}{local_tag}**")
+                st.caption(subtitle)
 
     # Recent activity
     st.subheader("📅 Recent Sessions")
@@ -115,6 +140,84 @@ if page == "📊 Dashboard":
             st.info("No reports generated yet. Run a report to see them here.")
     else:
         st.info("Reports directory not found. Configure `output_dir` in `config/config.yaml`.")
+
+# ═══════════════════════════════════════════════════════════════
+# LLM SETTINGS
+# ═══════════════════════════════════════════════════════════════
+elif page == "🧠 LLM Settings":
+    st.header("🧠 LLM Provider Settings")
+    st.markdown("Configure which LLM providers to use. Axeng auto-detects running local servers.")
+
+    prov_status = llm_status()
+    available = get_available_providers()
+    available_ids = [p[0] for p in available]
+
+    # Env instructions
+    with st.expander("📄 How to get API keys + set up local providers"):
+        st.markdown("""
+**Cloud Providers:**
+- **Anthropic**: [console.anthropic.com](https://console.anthropic.com) → API Keys
+- **OpenAI**: [platform.openai.com](https://platform.openai.com) → API Keys
+- **OpenCode**: Sign up at [opencode.ai](https://opencode.ai)
+- **Groq**: [console.groq.com](https://console.groq.com) → API Keys (free tier)
+- **OpenRouter**: [openrouter.ai](https://openrouter.ai/keys) → API Keys
+- **Google AI**: [aistudio.google.com](https://aistudio.google.com/app/apikey)
+
+**Local Providers (no API key needed):**
+- **Ollama**: `brew install ollama` → `ollama serve` → runs on `localhost:11434`
+- **LM Studio**: Download from [lmstudio.ai](https://lmstudio.ai) → run the app → API server on `localhost:1234`
+""")
+
+    # Provider status table
+    st.subheader("Provider Status")
+    data = []
+    for pid, info in PROVIDERS.items():
+        s = prov_status.get(pid, {})
+        if s.get("has_api_key"):
+            key_status = "✅ Key set"
+        elif s.get("is_running"):
+            key_status = "🟢 Server running"
+        else:
+            key_status = "○ Not configured"
+        data.append({
+            "Provider": info["name"],
+            "Type": "Local" if info.get("is_local") else "Cloud",
+            "Default Model": info.get("default_model", ""),
+            "Status": key_status,
+        })
+    st.dataframe(data, use_container_width=True, hide_index=True)
+
+    st.divider()
+
+    # Test LLM call
+    st.subheader("🧪 Test LLM")
+    test_col1, test_col2 = st.columns([3, 1])
+    with test_col1:
+        test_prompt = st.text_area(
+            "Test prompt",
+            value="Say hello in 3 words",
+            height=60,
+            label_visibility="collapsed",
+        )
+    with test_col2:
+        test_provider = st.selectbox(
+            "Provider",
+            options=list(PROVIDERS.keys()),
+            index=0,
+            format_func=lambda p: PROVIDERS[p]["name"],
+        )
+        test_btn = st.button("▶️ Send", use_container_width=True)
+
+    if test_btn and test_prompt:
+        with st.spinner(f"Calling {PROVIDERS[test_provider]['name']}..."):
+            from llm_gateway import call
+            result = call(test_prompt, provider=test_provider)
+            if result.get("ok"):
+                st.success(f"✅ {result.get('provider', '')}/{result.get('model', '')} → {result['text'][:200]}")
+                with st.expander("Full response"):
+                    st.markdown(result["text"])
+            else:
+                st.error(f"❌ {result.get('error', 'Unknown error')}")
 
 # ═══════════════════════════════════════════════════════════════
 # CONFIGURATION

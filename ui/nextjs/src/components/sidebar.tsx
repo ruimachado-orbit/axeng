@@ -2,10 +2,9 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Sheet, SheetContent } from '@/components/ui/sheet'
+
 import {
   LayoutDashboard,
   ScrollText,
@@ -98,8 +97,6 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 }
 
 export function Sidebar() {
-  const [open, setOpen] = useState(false)
-
   return (
     <>
       {/* Desktop sidebar */}
@@ -107,21 +104,25 @@ export function Sidebar() {
         <SidebarContent />
       </aside>
 
-      {/* Mobile: hamburger sheet */}
-      <div className="md:hidden fixed top-0 left-0 z-50 p-3">
-        <Sheet open={open} onOpenChange={setOpen}>
-          <button
-            type="button"
-            aria-label="Abrir menu"
-            onClick={() => setOpen(true)}
-            className="flex items-center justify-center w-10 h-10 rounded-xl bg-sidebar border border-white/10 shadow-lg active:scale-95 transition-transform"
-          >
-            <Menu className="w-5 h-5 text-white" />
-          </button>
-          <SheetContent side="left" className="w-64 p-0 bg-sidebar border-white/8">
-            <SidebarContent onNavigate={() => setOpen(false)} />
-          </SheetContent>
-        </Sheet>
+      {/* Mobile: CSS-only drawer — works even if mobile WebView drops React click handlers */}
+      <input id="mobile-menu-toggle" type="checkbox" className="peer sr-only md:hidden" aria-hidden="true" />
+      <label
+        htmlFor="mobile-menu-toggle"
+        aria-label="Abrir menu"
+        className="md:hidden fixed top-0 left-0 z-[80] m-3 flex items-center justify-center w-10 h-10 rounded-xl bg-sidebar border border-white/10 shadow-lg active:scale-95 transition-transform cursor-pointer"
+      >
+        <Menu className="w-5 h-5 text-white" />
+      </label>
+
+      <div className="md:hidden fixed inset-0 z-[90] hidden peer-checked:block">
+        <label
+          htmlFor="mobile-menu-toggle"
+          aria-label="Fechar menu"
+          className="absolute inset-0 block bg-black/30 backdrop-blur-[1px] cursor-pointer"
+        />
+        <aside className="absolute inset-y-0 left-0 w-64 bg-sidebar sidebar-gradient border-r border-white/8 shadow-2xl">
+          <SidebarContent />
+        </aside>
       </div>
     </>
   )

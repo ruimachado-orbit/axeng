@@ -13,14 +13,18 @@ from pathlib import Path
 
 # ── Config paths ──────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent
-sys.path.insert(0, str(SCRIPT_DIR))
+sys.path.insert(0, str(SCRIPT_DIR))  # local config first (has all legacy constants)
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+ENV_FILE = HERMES_HOME / ".env"
+TEAM_INTEL_DIR = HERMES_HOME / "scripts" / "team-intel"
+sys.path.insert(1, str(TEAM_INTEL_DIR))  # team-intel second (fallback)
+
+# ── Import config (local first, then hermes fallback) ──────────────────────
 from config import (
     GITHUB_ORGS, EX_MEMBERS, GITHUB_NAME_MAP,
     LINEAR_PROJECT_IDS, LINEAR_GITHUB_MAP,
     RECIPIENTS, email_from,
 )
-
-ENV_FILE = Path.home() / ".hermes" / ".env"
 
 # ── Env helpers ───────────────────────────────────────────────────────────────
 def load_env() -> dict:

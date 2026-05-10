@@ -107,3 +107,50 @@ reporting:
 
   # Post weekly updates to Linear projects (idempotent — overwrites previous week's update)
   post_linear_updates: true
+
+
+# ───────────────────────────────────────────────────────────────
+# CHAT ACTION ITEMS — extracts to-dos from a chat-event JSONL
+# feed, files them as Linear issues, posts a digest to Telegram.
+# Source script: src/chat-action-items.py
+# ───────────────────────────────────────────────────────────────
+chat_action_items:
+  # Set to true to enable the skill
+  enabled: false
+
+  source:
+    # JSONL of chat events. Default targets the hermes WhatsApp
+    # Baileys bridge — each line should at least include:
+    #   {chatId, senderId, pushName, fromMe, body, mentionedJids,
+    #    quotedParticipant, ts}
+    path: "~/.hermes/state/whatsapp-observed.jsonl"
+    # Cursor file (tracks file offset between runs)
+    cursor_path: "~/.axeng/state/chat-action-cursor.json"
+    # Optional HTTP endpoint to resolve chat IDs → friendly names.
+    # The hermes bridge exposes this at http://127.0.0.1:3000/groups
+    # Response shape: {"groups":[{"id":"...","subject":"..."}]}
+    subjects_url: ""
+
+  # Manual chat-id → friendly name overrides (used in prompt and digest)
+  chat_subjects: {}
+    # "351914878001-1555762600@g.us": "Family Group"
+
+  linear:
+    # Linear team key where issues are created (team must already exist)
+    team_key: ""
+    # When the LLM classifies owner=="me", assign the issue to the
+    # API key's viewer. Set to false to leave issues unassigned.
+    viewer_self: true
+
+  telegram:
+    # Posts the digest to TELEGRAM_CHAT_ID via TELEGRAM_BOT_TOKEN.
+    enabled: true
+
+  window:
+    # Self-gates so the script can be cron'd frequently without
+    # spamming outside business hours. enabled=false always runs.
+    enabled: true
+    days: ["mon","tue","wed","thu","fri"]
+    start: "08:00"
+    end: "19:30"
+    tz: "Europe/Lisbon"

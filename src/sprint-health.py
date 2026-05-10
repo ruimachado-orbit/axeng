@@ -47,13 +47,13 @@ def linear_query(query: str, variables: dict = None) -> dict:
         payload["variables"] = variables
 
     body = json.dumps(payload).encode()
-    req = __import__("urllib.request").Request(
+    req = __import__("urllib.request").request.Request(
         "https://api.linear.app/graphql",
         data=body,
         headers={"Authorization": key, "Content-Type": "application/json"},
     )
     try:
-        with __import__("urllib.request").urlopen(req, timeout=20) as r:
+        with __import__("urllib.request").request.urlopen(req, timeout=20) as r:
             return json.loads(r.read())
     except Exception as e:
         return {"errors": [{"message": str(e)}]}

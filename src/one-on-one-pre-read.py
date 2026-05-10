@@ -140,13 +140,13 @@ def fetch_person_linear_issues(person_name: str) -> dict:
     query { users(first: 20) { nodes { id name email } } }
     """
     payload = json.dumps({"query": query}).encode()
-    req = __import__("urllib.request").Request(
+    req = __import__("urllib.request").request.Request(
         "https://api.linear.app/graphql",
         data=payload,
         headers={"Authorization": key, "Content-Type": "application/json"},
     )
     try:
-        with __import__("urllib.request").urlopen(req, timeout=15) as r:
+        with __import__("urllib.request").request.urlopen(req, timeout=15) as r:
             users = json.loads(r.read()).get("data", {}).get("users", {}).get("nodes", [])
         user_id = next((u["id"] for u in users if person_name.lower() in u.get("name", "").lower()), None)
     except Exception:
@@ -168,13 +168,13 @@ def fetch_person_linear_issues(person_name: str) -> dict:
     }
     """
     payload = json.dumps({"query": gql, "variables": {"assignee": user_id}}).encode()
-    req = __import__("urllib.request").Request(
+    req = __import__("urllib.request").request.Request(
         "https://api.linear.app/graphql",
         data=payload,
         headers={"Authorization": key, "Content-Type": "application/json"},
     )
     try:
-        with __import__("urllib.request").urlopen(req, timeout=15) as r:
+        with __import__("urllib.request").request.urlopen(req, timeout=15) as r:
             data = json.loads(r.read())
         issues = data.get("data", {}).get("issues", {}).get("nodes", [])
         open_issues = [i for i in issues if i.get("state", {}).get("name") not in ("completed", "canceled")]
@@ -239,13 +239,13 @@ def fetch_sprint_velocity(person_name: str) -> dict:
 
     since = (datetime.now() - timedelta(days=14)).strftime("%Y-%m-%d")
     payload = json.dumps({"query": gql, "variables": {"since": since}}).encode()
-    req = __import__("urllib.request").Request(
+    req = __import__("urllib.request").request.Request(
         "https://api.linear.app/graphql",
         data=payload,
         headers={"Authorization": key, "Content-Type": "application/json"},
     )
     try:
-        with __import__("urllib.request").urlopen(req, timeout=15) as r:
+        with __import__("urllib.request").request.urlopen(req, timeout=15) as r:
             data = json.loads(r.read())
         issues = data.get("data", {}).get("issues", {}).get("nodes", []) or []
         by_project = {}

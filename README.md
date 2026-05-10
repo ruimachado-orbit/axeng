@@ -8,7 +8,14 @@ Axeng is an open-source autonomous agent that acts as your AI chief of staff —
 
 ---
 
-## ⚡ One-Command Setup
+## ⚡ One-Command Setup (Homebrew — recommended)
+
+```bash
+brew install ruimachado-orbit/axeng/axeng
+axeng  # starts Docker + opens http://localhost:8501
+```
+
+Or manually:
 
 ```bash
 git clone https://github.com/ruimachado-orbit/axeng.git

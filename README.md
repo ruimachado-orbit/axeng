@@ -44,7 +44,7 @@ open http://localhost:8501
 | What | Why | Where to get it |
 |------|-----|-----------------|
 | **Docker** | Runs the agent container | [docker.com](https://docs.docker.com/get-docker/) |
-| **LLM API key** | Generates all reports | [Anthropic](https://console.anthropic.com/) (Claude) or [OpenAI](https://platform.openai.com/) (GPT-4o) |
+| **LLM API key** | Generates all reports | See [LLM Setup](#-llm-providers) below |
 | **GitHub token** | Reads orgs, repos, PRs | `gh auth login` OR [github.com/settings/tokens](https://github.com/settings/tokens) |
 | **Linear API key** | Reads/writes issues + projects | [linear.app/settings/api](https://linear.app/settings/api) |
 | **Telegram bot** *(optional)* | Receives daily briefings | Talk to [@BotFather](https://t.me/BotFather) on Telegram |
@@ -57,34 +57,84 @@ open http://localhost:8501
 
 ## 🔑 Setting Up Your API Keys
 
-Edit the `.env` file in the axeng directory:
+### 🤖 LLM Providers
+
+Axeng supports **8 LLM providers** with automatic fallback — set one or more API keys:
+
+| Provider | Best For | API Key | Type |
+|----------|----------|---------|------|
+| **Anthropic Claude** | Best quality + speed | `ANTHROPIC_API_KEY` | Cloud |
+| **OpenAI** | o1/o3 reasoning models | `OPENAI_API_KEY` | Cloud |
+| **OpenCode AI** | Coding specialist | `OPENCODE_API_KEY` | Cloud |
+| **Groq** | Fast free inference | `GROQ_API_KEY` | Cloud |
+| **OpenRouter** | Multi-provider aggregation | `OPENROUTER_API_KEY` | Cloud |
+| **Google AI** | Gemini 2.0 Flash | `GOOGLE_API_KEY` | Cloud |
+| **Ollama** | Local Llama/Mixtral (no key needed) | — | **Local** |
+| **LM Studio** | Local GGUF models (no key needed) | — | **Local** |
+
+#### Cloud API Keys
+
+| Provider | Sign up / Console |
+|----------|-------------------|
+| Anthropic | [console.anthropic.com](https://console.anthropic.com) → API Keys |
+| OpenAI | [platform.openai.com](https://platform.openai.com) → API Keys |
+| OpenCode | [opencode.ai](https://opencode.ai) — free tier available |
+| Groq | [console.groq.com](https://console.groq.com) → API Keys (free tier) |
+| OpenRouter | [openrouter.ai/keys](https://openrouter.ai/keys) |
+| Google AI | [aistudio.google.com/app/apikey](https://aistudio.google.com/app/apikey) |
+
+#### 🏠 Local LLM (zero cost — runs on your machine)
+
+**Ollama** (recommended for local):
+```bash
+brew install ollama         # macOS
+# or: curl -fsSL https://ollama.com/install.sh | sh   # Linux
+
+ollama pull llama3.3         # or any model: mistral, codellama, qwen2.5
+ollama serve                # starts on http://localhost:11434/v1
+```
+
+**LM Studio** (GUI + API server):
+1. Download from [lmstudio.ai](https://lmstudio.ai)
+2. Download a model (GGUF format)
+3. Click **→ Local Server** tab → Start server
+4. Axeng auto-detects it at `http://localhost:1234/v1`
+
+#### How fallback works
+
+Axeng tries providers in this order until one succeeds:
+```
+Anthropic → OpenAI → OpenCode → Groq → OpenRouter → Google → Ollama → LM Studio
+```
+
+Override the order in `.env`:
+```bash
+LLM_PROVIDER_ORDER=ollama,anthropic,openai,groq
+```
+
+### GitHub & Linear
 
 ```bash
-# === REQUIRED ===
-
-# LLM — pick one (Claude recommended)
-ANTHROPIC_API_KEY=sk-ant-...      # anthropic.com — get from Console
-
 # GitHub — option A: token
-GITHUB_TOKEN=ghp_...
+GITHUB_TOKEN=***
+
 # OR option B: CLI auth (no token needed)
-# Run: gh auth login
+gh auth login
 
 # Linear — get from linear.app/settings/api
-LINEAR_API_KEY=lin_...
+LINEAR_API_KEY=***
 
 # === OPTIONAL ===
 
 # Telegram (for briefings)
-TELEGRAM_BOT_TOKEN=
-TELEGRAM_CHAT_ID=
+TELEGRAM_BOT_TOKEN=80|TEL..._ID=
 
 # Google Calendar (for OOO + 1:1 detection)
-GOOGLE_CLIENT_SECRET=~/.hermes/google_client_secret.json
-GOOGLE_TOKEN_PATH=~/.hermes/google_token.json
+GOOGLE_CLIENT_SECRET=~/.her...json
+GOOGLE_TOKEN_PATH=~/.her...json
 
 # World news in daily briefings
-NEWS_API_KEY=
+NEWS_API_KEY=***
 
 # Obsidian vault (for 1:1 notes + team sync)
 OBSIDIAN_VAULT_PATH=~/Documents/Obsidian\ Vault
@@ -250,19 +300,20 @@ axeng/
 │   ├── axeng-logs     # docker compose logs -f
 │   └── axeng-update   # git pull + rebuild + restart
 ├── src/
-│   ├── standup-brief.py     # Daily brief (07:30 Mon–Fri)
-│   ├── one-on-one-pre-read.py
-│   ├── sprint-health.py      # Sprint health (Fri 16:00)
-│   ├── risk-radar.py         # Risk radar (Fri 16:00)
-│   ├── team_sync.py          # GitHub → Obsidian sync
-│   ├── orchestrator.py       # NL query router
-│   ├── project_map.py        # Linear ↔ GitHub mapping
+│   ├── llm_gateway.py         # 🤖 Unified LLM client (8 providers + fallback)
+│   ├── standup-brief.py       # Daily brief (07:30 Mon–Fri)
+│   ├── one-on-one-pre-read.py # 1:1 pre-read generator
+│   ├── sprint-health.py       # Sprint health (Fri 16:00)
+│   ├── risk-radar.py          # Risk radar (Fri 16:00)
+│   ├── team_sync.py           # GitHub → Obsidian sync
+│   ├── orchestrator.py         # NL query router + LLM synthesis
+│   ├── project_map.py         # Linear ↔ GitHub mapping
 │   └── tools/
 │       ├── linear_tool.py
 │       ├── github_activity.py
 │       ├── calendar_insights.py
 │       ├── team_query.py
-│       ├── offboarding.py    # 🛡️ Offboarding tool
+│       ├── offboarding.py     # 🛡️ Offboarding tool
 │       └── linear_vacations.sh
 ├── ui/
 │   └── app.py          # Streamlit dashboard (port 8501)

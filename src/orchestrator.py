@@ -3,6 +3,8 @@
 Team Intel — Orchestrator
 NL query router: analyze_context + run_tools + synthesize.
 Config-driven tool registry and vault path.
+Optional LLM synthesis via llm_gateway (anthropic, openai, opencode,
+ollama, lmstudio, groq, openrouter, google).
 """
 import json, os, sys, subprocess
 from datetime import datetime, timedelta
@@ -10,7 +12,8 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
-from config import get, vault_path
+from config import get, vault_path, llm_provider_order, llm_default_provider, llm_max_tokens, llm_temperature
+from llm_gateway import call_with_fallback, status as llm_status, get_available_providers
 
 TOOLS_DIR = SCRIPT_DIR / "tools"
 LAST_SYNC = Path.home() / ".hermes" / "scripts" / "team-intel" / "last-sync.json"
@@ -24,55 +27,53 @@ def read_md(path: str) -> str:
         return ""
 
 
-# === Tool Registry ===
-
+# ── Tool Registry ─────────────────────────────────────────────────────────────
 def load_tool_registry() -> dict:
     """Build TOOLS dict from config.yaml tool_definitions section."""
     raw = get("orchestrator.tools", [])
 
-    # If not defined in config, fall back to built-in defaults
     if not raw:
         return {
             "github_activity": {
                 "script": "github_activity.py",
                 "args": [],
-                "purpose": "Get PRs, reviews, and contribution activity"
+                "purpose": "Get PRs, reviews, and contribution activity",
             },
             "calendar_insights": {
                 "script": "calendar_insights.py",
                 "args": ["insights", "7"],
-                "purpose": "Get meetings, 1:1s, team events"
+                "purpose": "Get meetings, 1:1s, team events",
             },
             "team_query": {
                 "script": "team_query.py",
                 "args": [],
-                "purpose": "Query Obsidian vault for stored data"
+                "purpose": "Query Obsidian vault for stored data",
             },
             "linear_issues": {
                 "script": "linear_tool.py",
                 "args": ["issues", "open"],
-                "purpose": "Get Linear issues by state"
+                "purpose": "Get Linear issues by state",
             },
             "linear_blockers": {
                 "script": "linear_tool.py",
                 "args": ["blockers", "7"],
-                "purpose": "Get unassigned Linear issues"
+                "purpose": "Get unassigned Linear issues",
             },
             "linear_mine": {
                 "script": "linear_tool.py",
                 "args": ["mine"],
-                "purpose": "Get my assigned Linear issues"
+                "purpose": "Get my assigned Linear issues",
             },
             "linear_sync": {
                 "script": "linear_tool.py",
                 "args": ["sync"],
-                "purpose": "Sync Linear issues to Obsidian vault"
+                "purpose": "Sync Linear issues to Obsidian vault",
             },
             "sync_all": {
                 "script": "team_sync.py",
                 "args": [],
-                "purpose": "Run full sync: GitHub + Calendar + Email → Obsidian"
-            }
+                "purpose": "Run full sync: GitHub + Calendar + Email → Obsidian",
+            },
         }
 
     tools = {}
@@ -82,7 +83,7 @@ def load_tool_registry() -> dict:
             tools[name] = {
                 "script": entry.get("script", ""),
                 "args": entry.get("args", []),
-                "purpose": entry.get("purpose", "")
+                "purpose": entry.get("purpose", ""),
             }
     return tools
 
@@ -90,8 +91,7 @@ def load_tool_registry() -> dict:
 TOOLS = load_tool_registry()
 
 
-# === Context Analysis ===
-
+# ── Context Analysis ──────────────────────────────────────────────────────────
 def analyze_context(goal: str) -> list:
     """
     Given a user query/goal, return which tools should run.
@@ -100,11 +100,9 @@ def analyze_context(goal: str) -> list:
     goal_lower = goal.lower()
     needed = []
 
-    # GitHub / PR / code activity
     if any(kw in goal_lower for kw in ["pr", "pull request", "review", "github", "contrib", "code", "merge"]):
         needed.append("github_activity")
 
-    # Linear / issues / tasks
     if any(kw in goal_lower for kw in ["linear", "issue", "tarefa", "task", "todo", "blocker", "priority", "estado"]):
         if any(kw in goal_lower for kw in ["meus", "my issues", "assigned", "eu"]):
             needed.append("linear_mine")
@@ -114,28 +112,23 @@ def analyze_context(goal: str) -> list:
             needed.append("linear_issues")
             needed.append("linear_sync")
 
-    # Calendar / meetings
     if any(kw in goal_lower for kw in ["meeting", "calendar", "standup", "1:1", "one-on-one", "agenda", "schedule"]):
         needed.append("calendar_insights")
 
-    # Email / decisions
     if any(kw in goal_lower for kw in ["email", "decisão", "decision", "inbox", "unread", "thread"]):
         needed.append("email_intel")
 
-    # Vault / team queries
     if any(kw in goal_lower for kw in ["who", "pessoa", "equipa", "team", "resumo", "summary",
                                         "where", "onde", "what", "trabalhar"]):
         needed.append("team_query")
 
-    # Sync requests
     if any(kw in goal_lower for kw in ["sync", "atualizar", "update", "refresh"]):
         needed.append("sync_all")
 
     return needed if needed else ["team_query"]
 
 
-# === Tool Execution ===
-
+# ── Tool Execution ─────────────────────────────────────────────────────────────
 def run_tool(tool_name: str, args: list = None) -> dict:
     if tool_name not in TOOLS:
         return {"error": f"Unknown tool: {tool_name}"}
@@ -144,7 +137,6 @@ def run_tool(tool_name: str, args: list = None) -> dict:
     script_path = TOOLS_DIR / tool["script"]
     args = args or tool.get("args", [])
 
-    # Fall back to running from SCRIPT_DIR if tools/ subdir doesn't exist
     if not script_path.exists():
         script_path = SCRIPT_DIR / tool["script"]
 
@@ -163,9 +155,122 @@ def run_tool(tool_name: str, args: list = None) -> dict:
         return {"error": str(e), "tool": tool_name}
 
 
-# === Response Synthesis ===
+# ── LLM Synthesis ─────────────────────────────────────────────────────────────
+def llm_synthesize(goal: str, tool_results: list, provider: str = None) -> str:
+    """
+    Use the LLM gateway to synthesize a response from tool results.
+    Falls back to the logic-driven synthesizer if LLM is unavailable.
+    """
+    # Format tool results for the LLM
+    results_text = _format_tool_results(tool_results)
 
-def synthesize_results(goal: str, tool_results: list) -> str:
+    # Try to read vault context
+    vault_context = _get_vault_context(goal)
+
+    system = (
+        "You are Axeng, an expert Engineering Manager AI assistant. "
+        "You help EM's with team management, project status, standups, reports, and decisions. "
+        "Always respond in the user's language (Portuguese or English). "
+        "Be concise, actionable, and specific. "
+        "Format with emoji, headers, and bullet points. "
+        "When data is missing, say so — don't make things up."
+    )
+
+    prompt = f"""Goal: {goal}
+
+Tool Results:
+{results_text}
+
+{f'Vault Context:\n{vault_context}' if vault_context else ''}
+
+Synthesize a clear, actionable response to the goal above. """
+    if "summary" in goal.lower() or "team" in goal.lower() or "equipa" in goal.lower():
+        prompt += (
+            "Include: key metrics, notable blockers, recent wins, and next steps. "
+            "Mention specific names, PR numbers, and dates where available."
+        )
+    elif "standup" in goal.lower() or "daily" in goal.lower():
+        prompt += (
+            "Structure as a standup report: what shipped, what's in progress, blockers, "
+            "who is OOO, and relevant PRs."
+        )
+    elif "risk" in goal.lower() or "radar" in goal.lower():
+        prompt += (
+            "List risks with severity (🔴 high, 🟡 medium, 🟢 low), owner, and suggested action."
+        )
+
+    providers = llm_provider_order()
+    if provider:
+        providers = [p for p in providers if p == provider] + providers
+
+    result = call_with_fallback(
+        prompt,
+        providers=providers,
+        system=system,
+        max_tokens=llm_max_tokens(),
+        temperature=llm_temperature(),
+        json_output=False,
+    )
+
+    if result.get("ok"):
+        model_used = result.get("model", "unknown")
+        prov = result.get("provider", "unknown")
+        print(f"✅ LLM synthesis: {prov}/{model_used}")
+        return result["text"]
+
+    # Fall back to logic-driven synthesis
+    print(f"⚠️ LLM unavailable ({result.get('error', 'unknown')}) — using rule-based synthesis")
+    return _synthesize_logic(goal, tool_results)
+
+
+def _format_tool_results(results: list) -> str:
+    """Format tool results for LLM prompt."""
+    parts = []
+    for r in results:
+        if not isinstance(r, dict):
+            parts.append(str(r))
+            continue
+        tool = r.get("tool", "unknown")
+        if "error" in r and not r.get("raw"):
+            parts.append(f"[{tool}] ERROR: {r['error']}")
+            continue
+        parts.append(f"[{tool}]")
+        for k, v in r.items():
+            if k == "tool":
+                continue
+            if isinstance(v, (list, dict)):
+                parts.append(f"  {k}: {json.dumps(v, ensure_ascii=False)[:500]}")
+            else:
+                parts.append(f"  {k}: {str(v)[:500]}")
+    return "\n".join(parts) if parts else "(no results)"
+
+
+def _get_vault_context(goal: str) -> str:
+    """Grab relevant vault content based on goal keywords."""
+    try:
+        vault = Path(vault_path())
+        snippets = []
+        goal_lower = goal.lower()
+
+        if any(k in goal_lower for k in ["team", "equipa", "member", "pessoa"]):
+            for f in vault.rglob("team-overview.md"):
+                content = read_md(str(f))[:1000]
+                if content:
+                    snippets.append(content)
+
+        if any(k in goal_lower for k in ["sprint", "project", "roadmap"]):
+            for f in vault.rglob("sprint*.md"):
+                content = read_md(str(f))[:800]
+                if content:
+                    snippets.append(content)
+
+        return "\n\n".join(snippets)[:2000] if snippets else ""
+    except:
+        return ""
+
+
+# ── Logic-Driven Synthesis (fallback) ─────────────────────────────────────────
+def _synthesize_logic(goal: str, tool_results: list) -> str:
     """
     Combine results from multiple tools into a coherent response.
     Logic-driven: no LLM, no prompts.
@@ -215,7 +320,7 @@ def synthesize_results(goal: str, tool_results: list) -> str:
         if parts:
             return "\n".join(parts)
 
-    # Rich vault content (non-Linear)
+    # Rich vault content
     for result in tool_results:
         if isinstance(result, dict):
             if "member_count" in result and result.get("overview"):
@@ -275,7 +380,7 @@ def synthesize_results(goal: str, tool_results: list) -> str:
                 return f"**Team Intel — {result['member_count']} membros**\n\nLast sync: {result.get('last_sync', 'Never')}"
         return "Sem dados da equipa."
 
-    # Default: try to read vault for rich data
+    # Default: try vault
     combined = []
     try:
         vault = Path(vault_path())
@@ -299,14 +404,23 @@ def synthesize_results(goal: str, tool_results: list) -> str:
     return "\n".join(combined) if combined else "Sem dados."
 
 
-# === Main Orchestrator ===
-
-def orchestrate(goal: str, auto_sync: bool = True) -> str:
+# ── Main Orchestrator ──────────────────────────────────────────────────────────
+def orchestrate(goal: str, auto_sync: bool = True, use_llm: bool = True,
+                provider: str = None, dry: bool = False) -> str:
     """
     Main entry point: analyze goal, run tools, synthesize response.
-    Optionally auto-sync if vault is stale (>4h).
+
+    Args:
+        goal: Natural language query
+        auto_sync: Auto-sync vault if stale (>4h)
+        use_llm: Use LLM gateway for synthesis (default True)
+        provider: Force a specific provider (None = use fallback order)
+        dry: Run tools but skip synthesis (for debugging)
     """
     print(f"🎯 Orchestrator: {goal}")
+    if dry:
+        print("  [DRY MODE — skipping synthesis]")
+        use_llm = False
 
     # Auto-sync if vault is stale
     if auto_sync:
@@ -333,25 +447,51 @@ def orchestrate(goal: str, auto_sync: bool = True) -> str:
         if result:
             results.append(result)
 
-    # Synthesize response
-    response = synthesize_results(goal, results)
+    if dry:
+        print("\n--- Tool Results ---")
+        for r in results:
+            print(json.dumps(r, indent=2, ensure_ascii=False)[:300])
+        return "(dry run — no synthesis)"
+
+    # Synthesize
+    if use_llm:
+        response = llm_synthesize(goal, results, provider=provider)
+    else:
+        response = _synthesize_logic(goal, results)
 
     return response
 
 
-# === CLI ===
-
+# ── CLI ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     auto = True
+    use_llm = True
+    dry = False
+    provider = None
     goal_parts = []
-    for arg in sys.argv[1:]:
+
+    for i, arg in enumerate(sys.argv[1:]):
         if arg == "--no-sync":
             auto = False
+        elif arg == "--no-llm":
+            use_llm = False
+        elif arg == "--llm":
+            use_llm = True
+        elif arg == "--dry":
+            dry = True
+        elif arg == "--provider" and i + 1 < len(sys.argv[1:]):
+            provider = sys.argv[1:][i + 2]  # next arg after --provider
+            sys.argv = sys.argv[:i + 2] + sys.argv[i + 3:]
+        elif arg in ("--status", "-s"):
+            # LLM status
+            st = llm_status()
+            print(json.dumps(st, indent=2))
+            sys.exit(0)
         else:
             goal_parts.append(arg)
-    goal = " ".join(goal_parts) if goal_parts else "team summary"
 
-    response = orchestrate(goal, auto_sync=auto)
+    goal = " ".join(goal_parts) if goal_parts else "team summary"
+    response = orchestrate(goal, auto_sync=auto, use_llm=use_llm, provider=provider, dry=dry)
     print("\n" + "=" * 50)
     print(response)
     print("=" * 50)

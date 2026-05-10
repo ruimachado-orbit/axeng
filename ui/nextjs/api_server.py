@@ -179,6 +179,76 @@ def seed_demo_logs():
 
 seed_demo_logs()
 
+# ── Enrich DB from real gateway log ──────────────────────────────────────────
+def enrich_logs_from_gateway():
+    """Parse ~/.hermes/logs/gateway.log and inject real conversation entries."""
+    gateway_log = Path.home() / ".hermes" / "logs" / "gateway.log"
+    if not gateway_log.exists():
+        return
+
+    conn = sqlite3.connect(LOGS_DB)
+    existing = set(
+        row[0] for row in conn.execute("SELECT action FROM agent_logs").fetchall()
+    )
+    new_entries = []
+
+    for line in gateway_log.read_text().splitlines():
+        # inbound messages → conversation entries
+        if "inbound message" in line:
+            try:
+                ts = line[:19]
+                parts = line.split("user=", 1)
+                if len(parts) < 2:
+                    continue
+                user_part = parts[1].split(" chat=")[0]
+                msg_part = parts[1].split(" msg='")[1].rstrip("'") if " msg='" in parts[1] else ""
+                if msg_part and msg_part not in existing:
+                    new_entries.append((ts, "conversation", "info", f"Mensagem de {user_part}", msg_part[:100], None, None, None))
+                    existing.add(msg_part)
+            except Exception:
+                pass
+
+        # response ready → success/failure entries
+        if "response ready" in line:
+            try:
+                ts = line[:19]
+                if "time=" in line:
+                    time_part = line.split("time=")[1].split("s")[0]
+                    duration = int(float(time_part) * 1000)
+                else:
+                    duration = None
+                api_calls = None
+                if "api_calls=" in line:
+                    api_calls = int(line.split("api_calls=")[1].split(" ")[0])
+                platform = line.split("platform=")[1].split(" ")[0] if "platform=" in line else "telegram"
+                if f"Response delivered {platform}" not in existing:
+                    new_entries.append((ts, "delivery", "success", "Resposta enviada", f"{platform} · {api_calls or '?'} api calls", duration, None, None))
+                    existing.add(f"Response delivered {platform}")
+            except Exception:
+                pass
+
+        # report generation from agent activity
+        if any(x in line for x in ["standup-brief", "sprint-health", "risk-radar", "weekly-report", "one-on-one"]):
+            try:
+                ts = line[:19]
+                action = next(x for x in ["standup-brief", "sprint-health", "risk-radar", "weekly-report", "one-on-one"] if x in line)
+                if action not in existing:
+                    new_entries.append((ts, "report", "success", f"{action}.py executado", "Relatório gerado com sucesso", None, action + ".py", None))
+                    existing.add(action)
+            except Exception:
+                pass
+
+    if new_entries:
+        conn.executemany(
+            "INSERT OR IGNORE INTO agent_logs (timestamp, type, level, action, details, duration_ms, tool, target) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            new_entries
+        )
+        conn.commit()
+        print(f"[Axeng] Injected {len(new_entries)} real log entries from gateway.log")
+    conn.close()
+
+enrich_logs_from_gateway()
+
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
 @app.get("/api/health")

@@ -1,11 +1,15 @@
 'use client'
 
 import { useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Separator } from '@/components/ui/separator'
 import { Button } from '@/components/ui/button'
+import {
+  Grid2X2, List, GitBranch, ExternalLink, MessageSquare,
+  ArrowUp, ArrowDown, Clock
+} from 'lucide-react'
 
 const teamMembers = [
   { id: '1', name: 'Pedro Ferreira', role: 'Backend Engineer', email: 'pedro.ferreira@maiolabs.ai', status: 'active', github: 'pedroferreira-orbit', linear: 'pedro.ferreira', avatar: 'PF', skills: ['Python', 'FastAPI', 'PostgreSQL'], activeProjects: ['Orbit', 'Compass'], openIssues: 12, prsOpen: 3, lastActivity: '2026-05-10T09:15:00' },
@@ -18,9 +22,19 @@ const teamMembers = [
 ]
 
 const statusConfig = {
-  active: { label: 'Ativo', dot: 'bg-green-500', badge: 'bg-green-100 text-green-700' },
-  ooo: { label: 'Fora de escritório', dot: 'bg-amber-400', badge: 'bg-amber-100 text-amber-700' },
+  active: { label: 'Ativo',     dot: 'bg-emerald-500', badge: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-400' },
+  ooo:   { label: 'OOO',        dot: 'bg-amber-400',    badge: 'bg-amber-50 text-amber-700 dark:bg-amber-950/30 dark:text-amber-400' },
 }
+
+const avatarGradients = [
+  'from-indigo-500 to-purple-600',
+  'from-blue-500 to-cyan-600',
+  'from-pink-500 to-rose-600',
+  'from-amber-500 to-orange-600',
+  'from-emerald-500 to-teal-600',
+  'from-violet-500 to-fuchsia-600',
+  'from-cyan-500 to-blue-600',
+]
 
 function formatLastSeen(ts: string) {
   const diff = Date.now() - new Date(ts).getTime()
@@ -36,172 +50,165 @@ export default function TeamPage() {
   const [selected, setSelected] = useState<string | null>(null)
 
   const activeCount = teamMembers.filter(m => m.status === 'active').length
-  const oooCount = teamMembers.filter(m => m.status === 'ooo').length
-
+  const oooCount    = teamMembers.filter(m => m.status === 'ooo').length
   const selectedMember = teamMembers.find(m => m.id === selected)
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in-up">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-slate-900">Team</h1>
-        <p className="text-slate-500 text-sm mt-1">Estado da equipa · assignments · atividade</p>
+        <h1 className="text-2xl font-bold tracking-tight">
+          <span className="gradient-text">Team</span>
+        </h1>
+        <p className="text-muted-foreground text-sm mt-1">Estado da equipa · assignments · atividade</p>
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-3 gap-4">
-        <Card className="bg-white">
-          <CardContent className="pt-4 pb-3">
-            <div className="text-2xl font-bold text-slate-900">{teamMembers.length}</div>
-            <div className="text-slate-500 text-sm mt-1">Total membros</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-white">
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-              <div className="text-2xl font-bold text-green-700">{activeCount}</div>
-            </div>
-            <div className="text-slate-500 text-sm mt-1">Ativos</div>
-          </CardContent>
-        </Card>
-        <Card className="bg-white">
-          <CardContent className="pt-4 pb-3">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-amber-400" />
-              <div className="text-2xl font-bold text-amber-700">{oooCount}</div>
-            </div>
-            <div className="text-slate-500 text-sm mt-1">OOO</div>
-          </CardContent>
-        </Card>
+      <div className="grid grid-cols-3 gap-3">
+        {[
+          { label: 'Total',  value: teamMembers.length, color: 'text-foreground',   grad: 'from-slate-500 to-slate-600'  },
+          { label: 'Ativos', value: activeCount,         color: 'text-emerald-600',  grad: 'from-emerald-500 to-teal-600' },
+          { label: 'OOO',    value: oooCount,            color: 'text-amber-600',    grad: 'from-amber-500 to-orange-600' },
+        ].map(s => (
+          <Card key={s.label} className="glass border-border/40 overflow-hidden">
+            <CardContent className="p-4">
+              <div className={`text-2xl font-bold ${s.color}`}>{s.value}</div>
+              <div className="text-xs text-muted-foreground mt-1">{s.label}</div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
 
       {/* View toggle */}
       <div className="flex gap-2">
         <button
           onClick={() => setView('cards')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            view === 'cards' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all glass-hover border ${
+            view === 'cards' ? 'nav-active text-white border-indigo-400/30' : 'glass border-border/40 text-muted-foreground'
           }`}
         >
-          Cards
+          <Grid2X2 className="w-3.5 h-3.5" /> Cards
         </button>
         <button
           onClick={() => setView('table')}
-          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-            view === 'table' ? 'bg-slate-900 text-white' : 'bg-white text-slate-600 border border-slate-200'
+          className={`inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium transition-all glass-hover border ${
+            view === 'table' ? 'nav-active text-white border-indigo-400/30' : 'glass border-border/40 text-muted-foreground'
           }`}
         >
-          Tabela
+          <List className="w-3.5 h-3.5" /> Tabela
         </button>
       </div>
 
-      {/* Team grid */}
-      {view === 'cards' ? (
+      {/* Cards view */}
+      {view === 'cards' && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {teamMembers.map(member => {
+          {teamMembers.map((member, i) => {
             const cfg = statusConfig[member.status as keyof typeof statusConfig]
+            const grad = avatarGradients[i % avatarGradients.length]
             return (
               <Card
                 key={member.id}
-                className={`bg-white cursor-pointer transition-all hover:ring-2 hover:ring-blue-400 ${
-                  selected === member.id ? 'ring-2 ring-blue-500' : ''
+                className={`glass glass-hover border-border/40 cursor-pointer overflow-hidden transition-all ${
+                  selected === member.id ? 'ring-2 ring-indigo-500 border-indigo-400/40' : ''
                 }`}
                 onClick={() => setSelected(selected === member.id ? null : member.id)}
               >
-                <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-3">
                     <div className="flex items-center gap-3">
-                      <Avatar className="w-10 h-10">
-                        <AvatarFallback className="bg-blue-600 text-white text-sm">{member.avatar}</AvatarFallback>
+                      <Avatar className="w-11 h-11 ring-2 ring-border/40">
+                        <AvatarFallback className={`bg-gradient-to-br ${grad} text-white text-sm font-bold shadow-lg`}>
+                          {member.avatar}
+                        </AvatarFallback>
                       </Avatar>
-                      <div>
-                        <p className="font-semibold text-slate-900 text-sm">{member.name}</p>
-                        <p className="text-xs text-slate-500">{member.role}</p>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-sm truncate">{member.name}</p>
+                        <p className="text-xs text-muted-foreground truncate">{member.role}</p>
                       </div>
                     </div>
-                    <div className={`flex items-center gap-1.5 text-xs font-medium ${cfg.badge} px-2 py-1 rounded-full`}>
-                      <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+                    <div className={`flex items-center gap-1.5 text-xs font-medium px-2 py-1 rounded-full ${cfg.badge}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                       {cfg.label}
                     </div>
                   </div>
-                </CardHeader>
-                <CardContent>
+
                   <div className="grid grid-cols-3 gap-2 mb-3">
-                    <div className="text-center bg-slate-50 rounded-lg py-2">
-                      <div className="text-lg font-bold text-slate-900">{member.openIssues}</div>
-                      <div className="text-xs text-slate-500">Issues</div>
-                    </div>
-                    <div className="text-center bg-slate-50 rounded-lg py-2">
-                      <div className="text-lg font-bold text-blue-600">{member.prsOpen}</div>
-                      <div className="text-xs text-slate-500">PRs</div>
-                    </div>
-                    <div className="text-center bg-slate-50 rounded-lg py-2">
-                      <div className="text-xs font-medium text-slate-700 mt-0.5">{formatLastSeen(member.lastActivity)}</div>
-                      <div className="text-xs text-slate-500">Ativo</div>
-                    </div>
+                    {[
+                      { v: member.openIssues, label: 'Issues', color: 'text-foreground' },
+                      { v: member.prsOpen,    label: 'PRs',    color: 'text-indigo-600' },
+                      { v: formatLastSeen(member.lastActivity), label: 'Ativo', color: 'text-muted-foreground', small: true },
+                    ].map(item => (
+                      <div key={item.label} className="text-center bg-secondary/50 rounded-lg py-2 px-1">
+                        <div className={`font-bold ${item.small ? 'text-[11px]' : 'text-lg'} ${item.color}`}>{item.v}</div>
+                        <div className="text-[10px] text-muted-foreground">{item.label}</div>
+                      </div>
+                    ))}
                   </div>
+
                   {member.activeProjects.length > 0 && (
                     <div className="flex gap-1.5 flex-wrap">
                       {member.activeProjects.map(p => (
-                        <span key={p} className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">{p}</span>
+                        <span key={p} className="text-[11px] bg-indigo-50 text-indigo-600 dark:bg-indigo-950/30 dark:text-indigo-400 px-2 py-0.5 rounded-full font-medium">{p}</span>
                       ))}
                     </div>
                   )}
                   {member.status === 'ooo' && member.oooUntil && (
-                    <p className="text-xs text-amber-600 mt-2">↩️ Volta: {new Date(member.oooUntil).toLocaleDateString('pt-PT')}</p>
+                    <p className="text-xs text-amber-600 mt-2 flex items-center gap-1">
+                      <Clock className="w-3 h-3" /> Volta: {new Date(member.oooUntil).toLocaleDateString('pt-PT')}
+                    </p>
                   )}
                 </CardContent>
               </Card>
             )
           })}
         </div>
-      ) : (
-        <Card className="bg-white overflow-hidden">
+      )}
+
+      {/* Table view */}
+      {view === 'table' && (
+        <Card className="glass border-border/40 overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-slate-100">
-                  <th className="text-left py-3 px-4 font-medium text-slate-500">Membro</th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-500">Estado</th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-500">Issues</th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-500">PRs</th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-500">Projetos</th>
-                  <th className="text-left py-3 px-4 font-medium text-slate-500">Última atividade</th>
+                <tr className="border-b border-border/40">
+                  {['Membro', 'Estado', 'Issues', 'PRs', 'Projetos', 'Última atividade'].map(h => (
+                    <th key={h} className="text-left py-3 px-4 font-medium text-muted-foreground text-xs uppercase tracking-wider">{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {teamMembers.map(m => {
+                {teamMembers.map((m, i) => {
                   const cfg = statusConfig[m.status as keyof typeof statusConfig]
+                  const grad = avatarGradients[i % avatarGradients.length]
                   return (
-                    <tr key={m.id} className="border-b border-slate-50 hover:bg-slate-50 cursor-pointer" onClick={() => setSelected(selected === m.id ? null : m.id)}>
+                    <tr key={m.id} className="border-b border-border/20 hover:bg-secondary/30 cursor-pointer transition-colors" onClick={() => setSelected(selected === m.id ? null : m.id)}>
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <Avatar className="w-7 h-7">
-                            <AvatarFallback className="bg-blue-600 text-white text-xs">{m.avatar}</AvatarFallback>
+                            <AvatarFallback className={`bg-gradient-to-br ${grad} text-white text-[10px] font-bold`}>{m.avatar}</AvatarFallback>
                           </Avatar>
                           <div>
-                            <p className="font-medium text-slate-900">{m.name}</p>
-                            <p className="text-xs text-slate-400">{m.role}</p>
+                            <p className="font-medium text-sm">{m.name}</p>
+                            <p className="text-xs text-muted-foreground">{m.role}</p>
                           </div>
                         </div>
                       </td>
                       <td className="py-3 px-4">
                         <div className={`inline-flex items-center gap-1.5 text-xs font-medium ${cfg.badge} px-2 py-1 rounded-full`}>
-                          <span className={`w-2 h-2 rounded-full ${cfg.dot}`} />
+                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
                           {cfg.label}
                         </div>
                       </td>
-                      <td className="py-3 px-4 font-semibold text-slate-700">{m.openIssues}</td>
-                      <td className="py-3 px-4 font-semibold text-blue-600">{m.prsOpen}</td>
+                      <td className="py-3 px-4 font-semibold text-foreground">{m.openIssues}</td>
+                      <td className="py-3 px-4 font-semibold text-indigo-600">{m.prsOpen}</td>
                       <td className="py-3 px-4">
-                        <div className="flex gap-1">
+                        <div className="flex gap-1 flex-wrap">
                           {m.activeProjects.map(p => (
-                            <span key={p} className="text-xs bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">{p}</span>
+                            <span key={p} className="text-xs bg-secondary text-muted-foreground px-1.5 py-0.5 rounded">{p}</span>
                           ))}
                         </div>
                       </td>
-                      <td className="py-3 px-4 text-xs text-slate-400">{formatLastSeen(m.lastActivity)}</td>
+                      <td className="py-3 px-4 text-xs text-muted-foreground">{formatLastSeen(m.lastActivity)}</td>
                     </tr>
                   )
                 })}
@@ -211,81 +218,83 @@ export default function TeamPage() {
         </Card>
       )}
 
-      {/* Member detail panel */}
+      {/* Detail panel */}
       {selectedMember && (
-        <Card className="bg-white border-blue-200">
-          <CardHeader>
-            <div className="flex items-center justify-between">
+        <Card className="glass border-indigo-400/30 overflow-hidden">
+          <CardContent className="p-5">
+            <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-4">
-                <Avatar className="w-12 h-12">
-                  <AvatarFallback className="bg-blue-600 text-white text-lg">{selectedMember.avatar}</AvatarFallback>
+                <Avatar className="w-12 h-12 ring-2 ring-indigo-500/30">
+                  <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-lg font-bold">
+                    {selectedMember.avatar}
+                  </AvatarFallback>
                 </Avatar>
                 <div>
-                  <CardTitle>{selectedMember.name}</CardTitle>
-                  <p className="text-sm text-slate-500">{selectedMember.role}</p>
+                  <h3 className="font-bold text-lg">{selectedMember.name}</h3>
+                  <p className="text-sm text-muted-foreground">{selectedMember.role}</p>
                 </div>
               </div>
               <div className={`inline-flex items-center gap-1.5 text-sm font-medium ${statusConfig[selectedMember.status as keyof typeof statusConfig].badge} px-3 py-1.5 rounded-full`}>
-                <span className={`w-2.5 h-2.5 rounded-full ${statusConfig[selectedMember.status as keyof typeof statusConfig].dot}`} />
+                <span className={`w-2 h-2 rounded-full ${statusConfig[selectedMember.status as keyof typeof statusConfig].dot}`} />
                 {statusConfig[selectedMember.status as keyof typeof statusConfig].label}
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-              <div className="bg-slate-50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-slate-900">{selectedMember.openIssues}</div>
-                <div className="text-xs text-slate-500 mt-1">Issues abertas</div>
-              </div>
-              <div className="bg-blue-50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-blue-600">{selectedMember.prsOpen}</div>
-                <div className="text-xs text-blue-500 mt-1">PRs abertos</div>
-              </div>
-              <div className="bg-slate-50 rounded-lg p-3 text-center">
-                <div className="text-2xl font-bold text-slate-900">{selectedMember.activeProjects.length}</div>
-                <div className="text-xs text-slate-500 mt-1">Projetos</div>
-              </div>
-              <div className="bg-slate-50 rounded-lg p-3 text-center">
-                <div className="text-sm font-semibold text-slate-700">{formatLastSeen(selectedMember.lastActivity)}</div>
-                <div className="text-xs text-slate-500 mt-1">Última atividade</div>
-              </div>
+
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              {[
+                { v: selectedMember.openIssues, label: 'Issues abertas', bg: 'bg-secondary/50' },
+                { v: selectedMember.prsOpen,    label: 'PRs abertos',    bg: 'bg-indigo-50 dark:bg-indigo-950/20 text-indigo-600' },
+                { v: selectedMember.activeProjects.length, label: 'Projetos', bg: 'bg-secondary/50' },
+                { v: formatLastSeen(selectedMember.lastActivity), label: 'Última atividade', bg: 'bg-secondary/50', small: true },
+              ].map(item => (
+                <div key={item.label} className={`text-center rounded-xl p-3 ${item.bg}`}>
+                  <div className={`font-bold ${item.small ? 'text-xs' : 'text-xl'} ${item.bg.includes('indigo') ? 'text-indigo-600' : 'text-foreground'}`}>{item.v}</div>
+                  <div className="text-[11px] text-muted-foreground mt-0.5">{item.label}</div>
+                </div>
+              ))}
             </div>
 
             <Separator className="my-4" />
 
-            <div className="space-y-3">
+            <div className="grid md:grid-cols-3 gap-4">
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Skills</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Skills</p>
                 <div className="flex gap-2 flex-wrap">
                   {selectedMember.skills.map(s => (
-                    <span key={s} className="text-xs bg-slate-100 text-slate-700 px-2 py-1 rounded-full">{s}</span>
+                    <span key={s} className="text-xs bg-secondary text-foreground px-2.5 py-1 rounded-full border border-border/40">{s}</span>
                   ))}
                 </div>
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Projetos</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Projetos</p>
                 <div className="flex gap-2 flex-wrap">
                   {selectedMember.activeProjects.map(p => (
-                    <span key={p} className="text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full font-medium">{p}</span>
+                    <span key={p} className="text-xs bg-indigo-50 text-indigo-700 dark:bg-indigo-950/30 dark:text-indigo-400 px-2.5 py-1 rounded-full font-medium">{p}</span>
                   ))}
                 </div>
               </div>
               <div>
-                <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">Links</p>
-                <div className="flex gap-3 text-xs">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">Links</p>
+                <div className="space-y-1">
                   {selectedMember.github && (
-                    <span className="text-slate-500">GH: <span className="text-blue-600">@{selectedMember.github}</span></span>
+                    <a href={`https://github.com/${selectedMember.github}`} target="_blank" rel="noopener" className="text-xs text-blue-500 hover:text-blue-600 flex items-center gap-1">
+                      <GitBranch className="w-3 h-3" /> @{selectedMember.github}
+                    </a>
                   )}
-                  <span className="text-slate-500">Linear: <span className="text-purple-600">{selectedMember.linear}</span></span>
-                  <span className="text-slate-500">Email: <span className="text-slate-700">{selectedMember.email}</span></span>
+                  <div className="text-xs text-purple-500 flex items-center gap-1">
+                    <List className="w-3 h-3" /> {selectedMember.linear}
+                  </div>
                 </div>
               </div>
             </div>
 
             <div className="flex gap-3 mt-5">
-              <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white text-xs">Gerar 1:1 Pre-read</Button>
-              <Button size="sm" variant="outline" className="text-xs">Ver Linear</Button>
-              <Button size="sm" variant="outline" className="text-xs">Ver GitHub</Button>
+              <Button size="sm" className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:opacity-90 text-white text-xs shadow-lg shadow-indigo-500/20">
+                <MessageSquare className="w-3.5 h-3.5 mr-1.5" /> Gerar 1:1 Pre-read
+              </Button>
+              <Button size="sm" variant="outline" className="text-xs glass-hover">
+                Ver Linear
+              </Button>
             </div>
           </CardContent>
         </Card>

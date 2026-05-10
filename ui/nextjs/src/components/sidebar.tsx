@@ -2,67 +2,125 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
+import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import {
+  LayoutDashboard,
+  ScrollText,
+  FileText,
+  Users,
+  Settings,
+  Menu,
+  Zap,
+} from 'lucide-react'
 
 const navItems = [
-  { label: 'Dashboard', href: '/', icon: '📊' },
-  { label: 'Agent Logs', href: '/logs', icon: '🕐' },
-  { label: 'Reports', href: '/reports', icon: '📋' },
-  { label: 'Team', href: '/team', icon: '👥' },
-  { label: 'Settings', href: '/settings', icon: '⚙️' },
+  { label: 'Dashboard',   href: '/',       icon: LayoutDashboard },
+  { label: 'Agent Logs', href: '/logs',   icon: ScrollText },
+  { label: 'Reports',    href: '/reports', icon: FileText },
+  { label: 'Team',       href: '/team',   icon: Users },
+  { label: 'Settings',   href: '/settings', icon: Settings },
 ]
 
-export function Sidebar() {
+function NavLink({ item }: { item: typeof navItems[0] }) {
   const pathname = usePathname()
+  const active = pathname === item.href
+  const Icon = item.icon
 
   return (
-    <aside className="flex flex-col w-64 min-h-screen bg-slate-900 border-r border-slate-800">
-      {/* Logo / Header */}
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-slate-800">
-        <div className="flex items-center justify-center w-9 h-9 rounded-lg bg-blue-600 text-white font-bold text-sm">
+    <Link
+      href={item.href}
+      className={cn(
+        'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative overflow-hidden',
+        active
+          ? 'nav-active text-white'
+          : 'text-slate-400 hover:text-white hover:bg-white/5'
+      )}
+    >
+      {/* Active shimmer */}
+      {active && (
+        <span className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent animate-gradient" />
+      )}
+      <Icon className={cn(
+        'w-[18px] h-[18px] shrink-0 transition-colors',
+        active ? 'text-white' : 'text-slate-500 group-hover:text-indigo-300'
+      )} />
+      <span className="relative z-10">{item.label}</span>
+      {active && (
+        <span className="ml-auto w-1.5 h-1.5 rounded-full bg-white/80" />
+      )}
+    </Link>
+  )
+}
+
+function SidebarContent() {
+  return (
+    <div className="flex flex-col h-full">
+      {/* Logo */}
+      <div className="flex items-center gap-3 px-4 py-5 border-b border-white/8">
+        <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white font-bold text-sm shadow-lg shadow-indigo-500/30">
           A
         </div>
         <div>
-          <p className="text-white font-semibold text-sm">Axeng</p>
-          <p className="text-slate-400 text-xs">EM Accelerator</p>
+          <p className="text-white font-semibold text-sm leading-tight">Axeng</p>
+          <p className="text-slate-400 text-xs flex items-center gap-1">
+            <Zap className="w-2.5 h-2.5 text-indigo-400" /> EM Accelerator
+          </p>
         </div>
       </div>
 
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1">
-        {navItems.map((item) => {
-          const active = pathname === item.href
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={cn(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors',
-                active
-                  ? 'bg-blue-600 text-white'
-                  : 'text-slate-400 hover:text-white hover:bg-slate-800'
-              )}
-            >
-              <span className="text-base">{item.icon}</span>
-              {item.label}
-            </Link>
-          )
-        })}
+        {navItems.map((item) => (
+          <NavLink key={item.href} item={item} />
+        ))}
       </nav>
 
       {/* User */}
-      <div className="px-4 py-4 border-t border-slate-800">
-        <div className="flex items-center gap-3">
-          <Avatar className="w-8 h-8">
-            <AvatarFallback className="bg-blue-600 text-white text-xs">RM</AvatarFallback>
+      <div className="px-4 py-4 border-t border-white/8">
+        <div className="flex items-center gap-3 p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors cursor-default">
+          <Avatar className="w-8 h-8 ring-2 ring-indigo-500/50 ring-offset-2 ring-offset-slate-900">
+            <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-xs font-bold">
+              RM
+            </AvatarFallback>
           </Avatar>
-          <div>
-            <p className="text-white text-sm font-medium">Rui Machado</p>
-            <p className="text-slate-400 text-xs">CTPO · Maio Labs</p>
+          <div className="min-w-0">
+            <p className="text-white text-sm font-medium truncate">Rui Machado</p>
+            <p className="text-slate-400 text-xs truncate">CTPO · Maio Labs</p>
           </div>
         </div>
       </div>
-    </aside>
+    </div>
+  )
+}
+
+export function Sidebar() {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <>
+      {/* Desktop sidebar */}
+      <aside className="hidden md:flex flex-col w-64 min-h-screen bg-sidebar sidebar-gradient border-r border-white/8 shrink-0">
+        <SidebarContent />
+      </aside>
+
+      {/* Mobile: hamburger sheet */}
+      <div className="md:hidden fixed top-0 left-0 z-50 p-3">
+        <Sheet open={open} onOpenChange={setOpen}>
+          <SheetTrigger
+            render={
+              <button className="flex items-center justify-center w-10 h-10 rounded-xl bg-sidebar border border-white/10 shadow-lg">
+                <Menu className="w-5 h-5 text-white" />
+              </button>
+            }
+          />
+          <SheetContent side="left" className="w-64 p-0 bg-sidebar border-white/8">
+            <SidebarContent />
+          </SheetContent>
+        </Sheet>
+      </div>
+    </>
   )
 }

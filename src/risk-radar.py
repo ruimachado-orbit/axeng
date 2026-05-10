@@ -14,10 +14,12 @@ import json, os, subprocess, sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+SCRIPT_DIR = Path(__file__).parent.resolve()
+sys.path.insert(0, str(SCRIPT_DIR))  # local config first (has all legacy constants)
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 ENV_FILE = HERMES_HOME / ".env"
 TEAM_INTEL_DIR = HERMES_HOME / "scripts" / "team-intel"
-sys.path.insert(0, str(TEAM_INTEL_DIR))
+sys.path.insert(1, str(TEAM_INTEL_DIR))  # hermes fallback second
 
 try:
     from config import LINEAR_PROJECT_IDS, LINEAR_GITHUB_MAP, TEAM_MEMBERS, EX_MEMBERS, GITHUB_ORGS
@@ -47,13 +49,14 @@ def linear_query(query: str, variables: dict = None) -> dict:
 
     payload = {"query": query, "variables": variables} if variables else {"query": query}
     body = json.dumps(payload).encode()
-    req = __import__("urllib.request").request.Request(
+    import urllib.request
+    req = urllib.request.Request(
         "https://api.linear.app/graphql",
         data=body,
         headers={"Authorization": key, "Content-Type": "application/json"},
     )
     try:
-        with __import__("urllib.request").request.urlopen(req, timeout=20) as r:
+        with urllib.request.urlopen(req, timeout=20) as r:
             return json.loads(r.read())
     except Exception as e:
         return {"errors": [{"message": str(e)}]}
@@ -188,7 +191,7 @@ def fetch_overloaded_members() -> list:
         uname = user.get("name", "")
 
         # Skip ex-members
-        if any(ex.get("name", "").lower() in uname.lower() for ex in EX_MEMBERS if hasattr(ex, "__iter__")):
+        if any(ex in uname.lower() for ex in EX_MEMBERS):
             continue
 
         # Get open issues + issues completed in last 14 days

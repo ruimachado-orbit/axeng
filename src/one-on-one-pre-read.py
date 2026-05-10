@@ -8,6 +8,7 @@ Produces suggested talking points.
 import json, os, subprocess, sys, re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from typing import Optional
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent
@@ -44,7 +45,7 @@ def load_google_token() -> str:
     return ""
 
 # ── Parse 1:1 attendee from meeting title or attendees ─────────────────────────
-def parse_1on1_person(title: str, attendees: list) -> dict | None:
+def parse_1on1_person(title: str, attendees: list) -> Optional[dict]:
     """Return {'name': '...', 'github': '...', 'email': '...'} for the non-self person."""
     # Known team members by name pattern
     team_names = {
@@ -353,7 +354,7 @@ def send_telegram(text: str):
         print(f"Telegram send failed: {e}")
 
 # ── Public entry point ────────────────────────────────────────────────────────
-def generate_1on1_preread(title: str, attendees: list, dry: bool = False) -> str | None:
+def generate_1on1_preread(title: str, attendees: list, dry: bool = False) -> Optional[str]:
     """Main function called by pre-meeting-brief.py."""
     person = parse_1on1_person(title, attendees)
     if not person:

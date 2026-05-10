@@ -65,7 +65,15 @@ def github_name_map() -> dict:
 
 
 def ex_members() -> set:
-    return set(get("github.ex_members", []))
+    raw = get("github.ex_members", [])
+    # Handle both list of strings and list of dicts
+    result = set()
+    for item in raw:
+        if isinstance(item, str):
+            result.add(item.lower())
+        elif isinstance(item, dict):
+            result.add(item.get("name", "").lower())
+    return result
 
 
 def linear_workspace() -> str:
@@ -126,19 +134,19 @@ def llm_model(provider: str) -> str:
     return get(f"llm.{provider}.model") or os.environ.get(f"{provider.upper()}_MODEL", "")
 
 
-# ── Backward-compat constants (for legacy scripts) ────────────────────────────
-# Scripts that import: from config import GITHUB_ORGS, EX_MEMBERS, ...
-# These are just aliases / computed values over the function API.
+# ── Legacy exports (for scripts that need module-level constants) ─────────────
 def _legacy_consts():
-    global GITHUB_ORGS, EX_MEMBERS, GITHUB_NAME_MAP
-    global LINEAR_PROJECT_IDS, LINEAR_GITHUB_MAP, RECIPIENTS
+    global GITHUB_ORGS, EX_MEMBERS, GITHUB_NAME_MAP, GITHUB_REPOS
+    global LINEAR_PROJECT_IDS, LINEAR_GITHUB_MAP, RECIPIENTS, TEAM_MEMBERS
 
     GITHUB_ORGS = github_orgs()
     EX_MEMBERS = ex_members()
     GITHUB_NAME_MAP = github_name_map()
+    GITHUB_REPOS = github_repos()
     LINEAR_PROJECT_IDS = linear_project_ids()
     LINEAR_GITHUB_MAP = linear_github_map()
     RECIPIENTS = recipients()
+    TEAM_MEMBERS = team_members()
 
 
 _legacy_consts()

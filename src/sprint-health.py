@@ -13,10 +13,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
+SCRIPT_DIR = Path(__file__).parent.resolve()
+sys.path.insert(0, str(SCRIPT_DIR))  # local config first (has all legacy constants)
 HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
 ENV_FILE = HERMES_HOME / ".env"
 TEAM_INTEL_DIR = HERMES_HOME / "scripts" / "team-intel"
-sys.path.insert(0, str(TEAM_INTEL_DIR))
+sys.path.insert(1, str(TEAM_INTEL_DIR))  # hermes fallback second
 
 try:
     from config import LINEAR_PROJECT_IDS, LINEAR_GITHUB_MAP, TEAM_MEMBERS
@@ -47,13 +49,15 @@ def linear_query(query: str, variables: dict = None) -> dict:
         payload["variables"] = variables
 
     body = json.dumps(payload).encode()
-    req = __import__("urllib.request").request.Request(
+    # Use top-level import (Python 3.9 compat: urllib.request.Request, not .request.request)
+    import urllib.request
+    req = urllib.request.Request(
         "https://api.linear.app/graphql",
         data=body,
         headers={"Authorization": key, "Content-Type": "application/json"},
     )
     try:
-        with __import__("urllib.request").request.urlopen(req, timeout=20) as r:
+        with urllib.request.urlopen(req, timeout=20) as r:
             return json.loads(r.read())
     except Exception as e:
         return {"errors": [{"message": str(e)}]}
@@ -73,9 +77,6 @@ def fetch_project_health(project_id: str, project_name: str) -> dict:
           }
         }
       }
-      projectUpdates(filter: { project: { id: { eq: $id } } }, first: 20) {
-        nodes { body createdAt }
-      }
     }
     """
     data = linear_query(query, {"id": project_id})
@@ -84,7 +85,7 @@ def fetch_project_health(project_id: str, project_name: str) -> dict:
 
     project = (data.get("data") or {}).get("project") or {}
     issues_raw = project.get("issues", {}).get("nodes", [])
-    updates = (data.get("data", {}).get("projectUpdates", {}).get("nodes", []) or [])
+    updates = []
 
     # Classify by state type
     state_types = {}
@@ -147,7 +148,7 @@ def fetch_project_health(project_id: str, project_name: str) -> dict:
         "created_recently": created_recently,
         "stale": stale,
         "at_risk": at_risk,
-        "days_since_update": days_since_update,
+        "days_since_update": 0,  # projectUpdates filter unavailable in Linear API
         "updates": updates,
     }
 

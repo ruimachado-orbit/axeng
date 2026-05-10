@@ -2,30 +2,123 @@
 
 **Stop managing. Start shipping.**
 
-Axeng is an open-source autonomous agent that acts as your AI chief of staff — monitors GitHub, Linear, your calendar, and team, then automatically generates standups, 1:1 pre-reads, sprint reports, risk alerts, team sync, and offboarding.
+Autonomous AI chief of staff that monitors GitHub, Linear, your calendar, and team — then automatically generates standups, 1:1 pre-reads, sprint reports, risk alerts, team sync, and offboarding.
 
-> Built by a CTO who was tired of manually chasing status updates. Now runs 24/7 on a $200 Mac Mini.
+> Runs 24/7 on a $200 Mac Mini. Built by a CTO who was tired of manually chasing status updates.
 
 ---
 
-## ⚡ One-Command Setup (Homebrew — recommended)
+## 🏗️ Two Ways to Run
 
-```bash
-brew install ruimachado-orbit/axeng/axeng
-axeng  # starts Docker + opens http://localhost:8501
-```
+### Option A — Standalone (Docker only) ← **Recommended for most users**
 
-Or manually:
+Axeng runs as a Docker container with its own config. No Hermes needed.
 
 ```bash
 git clone https://github.com/ruimachado-orbit/axeng.git
 cd axeng
-cp .env.example .env    # fill in your API keys
-cp config/config.yaml.example config/config.yaml
-docker compose up      # open http://localhost:8501
+
+# 1. Configure
+cp .env.example .env        # fill in your API keys (see below)
+cp config/config.yaml.example config/config.yaml  # fill in your orgs/team
+
+# 2. Start
+docker compose -f docker/docker-compose.yml up -d
+
+# 3. Open browser → http://localhost:8501
 ```
 
-That's it. 3 commands, 2 minutes, and you have a running system.
+**Homebrew shortcut:**
+```bash
+brew install ruimachado-orbit/axeng/axeng
+# Then manually copy .env + config.yaml and run:
+axeng
+```
+
+---
+
+### Option B — Integrated with Hermes (for Axemaster users)
+
+Axeng runs as a layer on top of your existing Hermes setup — leverages Hermes' Google Workspace, Calendar, and Obsidian integrations.
+
+**Prerequisites:**
+- ✅ Hermes already installed and running (`~/.hermes`)
+- ✅ Docker
+- ✅ API keys in `~/.hermes/.env`
+- ✅ GitHub CLI authenticated (`gh auth login`)
+- ✅ Linear API key in `~/.hermes/.env`
+- ✅ Google Workspace credentials (`~/.hermes/google_token.json`)
+
+**Setup:**
+```bash
+git clone https://github.com/ruimachado-orbit/axeng.git
+cd axeng
+
+# Create a symbolic link so axeng commands are available system-wide
+ln -sf "$(pwd)/bin/axeng-start" /usr/local/bin/axeng  # macOS default path
+ln -sf "$(pwd)/bin/axeng-stop" /usr/local/bin/axeng-stop
+ln -sf "$(pwd)/bin/axeng-logs" /usr/local/bin/axeng-logs
+ln -sf "$(pwd)/bin/axeng-update" /usr/local/bin/axeng-update
+
+# Axeng will pick up your .env and Google tokens from ~/.hermes automatically
+axeng
+```
+
+The docker-compose mounts your `~/.hermes` so the tools inside the container can use the same credentials as your main Hermes agent.
+
+---
+
+## 🔑 Required API Keys
+
+### For Option A (Standalone)
+Create `~/.env` with:
+```bash
+# LLM — pick one
+ANTHROPIC_API_KEY=sk-ant-...      # Claude
+# OR
+OPENAI_API_KEY=sk-...             # GPT-4o
+
+# GitHub
+GITHUB_TOKEN=ghp_...              # from github.com/settings/tokens
+
+# Linear
+LINEAR_API_KEY=lin_...            # from linear.app/settings/api
+
+# Optional
+GOOGLE_API_KEY=...                # for Google Calendar integration
+TELEGRAM_BOT_TOKEN=...            # for Telegram notifications
+NEWS_API_KEY=...                  # for world news in briefings
+```
+
+### For Option B (Hermes Integrated)
+Your `~/.hermes/.env` already has most of these. Axeng will read from there.
+
+---
+
+## ⚙️ Configuration
+
+Edit `config/config.yaml`:
+
+```yaml
+github:
+  orgs: ["your-org"]                    # your GitHub org(s)
+  name_map:                             # GitHub login → display name
+    "johndoe": "John Doe"
+  ex_members: []                        # exclude from reports (ex-employees, bots)
+
+linear:
+  project_ids:                          # Linear project name → ID
+    "Project Alpha": "xxxxxxxx-xxxx..."
+  projects:                             # Linear project → GitHub repos → owner
+    "Project Alpha":
+      repos: ["your-org/frontend"]
+      owner: "John Doe"
+
+email:
+  recipients: ["team@example.com"]
+  from: "team@example.com"
+  gmail_script: "~/.hermes/skills/productivity/google-workspace/scripts/google_api.py"
+```
 
 ---
 
@@ -50,7 +143,6 @@ Per-project status, MVP of the week (scored), commit breakdown, roadmap analysis
 - Covers Sat–Fri week
 - MVP podium (top 3 contributors by impact + commits)
 - Per-project card: activity, issues opened/closed, owner
-- Roadmap contribution analysis per repo
 
 ### 📈 Sprint Health (Friday 16:00)
 Health scores (0–100) per project — velocity, scope creep, stale issues, overdue → **flagged before it becomes a crisis**
@@ -65,44 +157,24 @@ Quiet repos, overloaded members, orphaned PRs, stalled projects → **proactive,
 - Linear projects with >3 in-progress issues and no movement
 - Team members with >5 open issues and low throughput
 - PRs open >7 days with no review requests
-- Linear issues with due dates in the past
 
-### 🔄 Team Sync (daily, configurable)
-GitHub activity → Obsidian vault, keeping your personal knowledge base up to date automatically
-- Fetches commits, PRs, and issue activity per team member
-- Writes structured notes to Obsidian per team member
-- Tracks last sync timestamp to avoid duplicates
+### 🔄 Team Sync (daily)
+GitHub activity → Obsidian vault, keeping your personal knowledge base up to date
 
 ### 🧳 Vacation Tracker (ongoing)
 Team vacation calendar managed via Linear issues with the Vacation label
-- `add_vacation <name> <start> <end> [note]` — create a vacation issue
-- `update_vacation <issue_id> <start> <end> [note]` — update dates
-- `delete_vacation <issue_id>` — remove vacation
-- `list_vacations` — show upcoming vacations
-- Weekly digest posted to Linear every Monday
 
-### 🛡️ Offboarding (on-demand, any time)
-Remove a collaborator's access from all GitHub orgs AND Linear workspace in one command
+### 🛡️ Offboarding (on-demand)
 ```bash
-python3 src/tools/offboarding.py <github_login>          # real execution
-python3 src/tools/offboarding.py <github_login> --dry-run  # preview first
-python3 src/tools/offboarding.py <github_login> --skip-linear  # GitHub only
+python3 src/tools/offboarding.py <github_login> --dry-run  # preview
+python3 src/tools/offboarding.py <github_login>            # execute
 ```
-- Scans all GitHub orgs (except excluded: `mynort`, `remynd`, `my-north-ai`, `remynd-me`)
-- Removes collaborator from every repo where they appear
-- Cancels pending repository invitations
-- Finds the user in Linear by email/name + archives them + removes from all teams
 
 ---
 
-## 🖥️ Web UI (Streamlit)
+## 🖥️ Web UI
 
-```
-streamlit run ui/app.py
-# → http://localhost:8501
-```
-
-Dashboard with session history, team overview, report viewer, manual report triggers, and config editor.
+Streamlit dashboard at `http://localhost:8501` — session history, team overview, report viewer, manual triggers, config editor.
 
 ---
 
@@ -111,28 +183,6 @@ Dashboard with session history, team overview, report viewer, manual report trig
 - All credentials in `.env` — **never committed to git**
 - `.env` is in `.gitignore` by default
 - API keys never leave your machine (self-hosted)
-- Works fully offline once configured
-
----
-
-## ⚙️ What You Need to Configure
-
-```yaml
-# config/config.yaml — takes 10 minutes to set up
-github:
-  orgs: ["your-org"]
-linear:
-  projects:
-    "My Project":
-      repos: ["your-org/frontend"]
-      owner: "John Doe"
-email:
-  recipients: ["manager@company.com"]
-team:
-  - name: "John Doe"
-    github: "johndoe"
-    email: "john@company.com"
-```
 
 ---
 
@@ -140,74 +190,64 @@ team:
 
 ```
 axeng/
-├── .env.example              ← copy to .env (gitignored!)
-├── config/
-│   └── config.yaml.example  ← copy to config.yaml
-├── docker/
-│   ├── Dockerfile
-│   └── docker-compose.yml
+├── bin/                    # Convenience scripts (axeng-start/stop/logs/update)
+│   ├── axeng-start
+│   ├── axeng-stop
+│   ├── axeng-logs
+│   └── axeng-update
 ├── src/
-│   ├── standup-brief.py     ← daily brief
+│   ├── standup-brief.py    # Daily brief (07:30 Mon–Fri)
 │   ├── one-on-one-pre-read.py
-│   ├── weekly_report.py     ← team report
 │   ├── sprint-health.py
 │   ├── risk-radar.py
 │   ├── team_sync.py
 │   ├── orchestrator.py
-│   └── tools/               ← Linear, GitHub, Calendar integrations
+│   └── tools/              # Linear, GitHub, Calendar, Offboarding
 ├── ui/
-│   └── app.py               ← Streamlit dashboard
-├── LICENSE                  ← MIT
-├── CONTRIBUTING.md
+│   └── app.py              # Streamlit dashboard (port 8501)
+├── docker/
+│   ├── Dockerfile
+│   └── docker-compose.yml
+├── config/
+│   └── config.yaml.example
+├── .env.example
 └── README.md
 ```
 
 ---
 
-## 🐳 Docker
+## 🐳 Docker Commands
 
 ```bash
-# Start (background)
-docker compose up -d
-
-# View logs
-docker compose logs -f
-
-# Rebuild after code changes
-docker compose build && docker compose up -d
-
-# Stop
-docker compose down
+axeng          # Start (docker compose up -d)
+axeng-stop     # Stop (docker compose down)
+axeng-logs     # View live logs (docker compose logs -f)
+axeng-update   # Pull latest + rebuild + restart
 ```
 
 ---
 
-## 🔧 Requirements
+## 🎤 Conference Talks
 
-- Python 3.11+
-- [GitHub CLI](https://cli.github.com/) (`gh auth login`) or `GITHUB_TOKEN`
-- [Linear](https://linear.app) API key
-- An LLM API key (Anthropic Claude, OpenAI GPT-4, Google Gemini, Groq — any)
-
----
-
-## 🎤 For Conference Talks / Keynotes
-
-See the [release assets](https://github.com/ruimachado-orbit/axeng/releases) for keynote slides:
-- `axeng-keynote-combined.pptx` — full 13-slide deck (5 intro + 8 tech deep-dive)
+Keynote slides at [github.com/ruimachado-orbit/axeng/releases](https://github.com/ruimachado-orbit/axeng/releases):
+- `axeng-keynote-combined.pptx` — 13-slide full deck
 - `axeng-keynote-tech.pptx` — 8 technical slides only
 
 ---
 
 ## 🤝 Contributing
 
-1. Fork it
-2. Create your branch: `git checkout -b feat/your-feature`
-3. Run it locally (`streamlit run ui/app.py`)
-4. Open a PR — see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
+```bash
+git clone https://github.com/ruimachado-orbit/axeng.git
+cd axeng
+cp .env.example .env && cp config/config.yaml.example config/config.yaml
+streamlit run ui/app.py  # develop locally
+git checkout -b feat/your-feature
+# open PR
+```
 
 ---
 
 ## 📄 License
 
-MIT — use it, fork it, build on it. No strings attached.
+MIT — use it, fork it, build on it.

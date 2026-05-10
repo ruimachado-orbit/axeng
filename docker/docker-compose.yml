@@ -20,15 +20,13 @@ services:
       - ~/.config/gh:/root/.config/gh:ro
     environment:
       - PYTHONPATH=/app/src
-    env_file:
-      - .env
     command: >
       sh -c "
-        # Copy config if not exists
+        # Copy config from example if not exists
         cp config/config.yaml.example config/config.yaml 2>/dev/null || true;
 
-        # Start the Streamlit UI (default)
-        streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0
+        # Run the Streamlit web UI (always-on for self-hosted)
+        streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0 --browser.gatherUsageStats false
       "
     ports:
       - "8501:8501"

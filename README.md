@@ -1,134 +1,87 @@
 # Axeng — Engineering Manager Accelerator 🤖
 
-**Open source autonomous engineering intelligence agent** — monitors GitHub, Linear, and team activity, generates daily briefs, and keeps your team in sync.
+**Stop managing. Start shipping.**
 
-Built for engineering leaders who want to know what's shipping, who's blocked, and where the roadmap stands — without asking.
+Axeng is an open-source autonomous agent that acts as your AI chief of staff — monitors GitHub, Linear, and your team, generates daily briefs, 1:1 pre-reads, and weekly reports — automatically, every day.
+
+> Built by a CTO who was tired of manually chasing status updates. Now runs 24/7 on a $200 Mac Mini.
 
 ---
 
-## ⚡ Quick Start (Docker)
+## ⚡ One-Command Setup
 
 ```bash
 git clone https://github.com/ruimachado-orbit/axeng.git
 cd axeng
-
-# 1. Copy and fill in your environment variables
-cp .env.example .env
-nano .env   # add your API keys
-
-# 2. Copy and configure
+cp .env.example .env    # fill in your API keys
 cp config/config.yaml.example config/config.yaml
-nano config/config.yaml   # add your team, repos, Linear project IDs
-
-# 3. Run
-docker compose up
+docker compose up        # open http://localhost:8501
 ```
 
-Open **http://localhost:8501** — you'll see the dashboard and can trigger reports from the UI.
+That's it. 3 commands, 2 minutes, and you have a running system.
 
 ---
 
-## ⚡ Quick Start (Local / Dev)
-
-```bash
-git clone https://github.com/ruimachado-orbit/axeng.git
-cd axeng
-
-pip install -r requirements.txt
-
-cp .env.example .env
-cp config/config.yaml.example config/config.yaml
-
-streamlit run ui/app.py
-```
-
----
-
-## ✨ Features
+## 💡 What It Does
 
 ### 🏃 Daily Standup Brief (Mon–Fri 07:30)
-- What shipped yesterday
-- Unassigned / stale Linear issues (blockers)
-- PRs waiting >48h for review
-- Who's OOO today
+What shipped yesterday, who's blocked, PRs waiting >48h, who's OOO → **sent to Telegram**
 
-### 📋 1:1 Pre-reads (before each 1:1)
--对方的 open Linear issues + priority
-- Their commits this week
-- Pending PRs awaiting their review
-- Last 1:1 notes from Obsidian
-- Suggested talking points
-- Sprint velocity (14-day)
+### 📋 1:1 Pre-reads (auto before every meeting)
+对方的 open issues, their commits this week, pending PRs, last 1:1 notes → **ready before you walk in**
 
 ### 📊 Weekly Team Report (Friday 17:00)
-- Per-project roadmap status (from Linear)
-- MVP of the week (F1 podium scoring)
-- Per-person commit breakdown with estimated hours
-- Roadmap contribution analysis
-- Business summary posted to each Linear project
-
-### 🔄 Daily Vault Sync
-- Fetches GitHub activity → stores in Obsidian vault
-- Builds team member profiles over time
+Per-project status, MVP of the week (scored), commit breakdown, roadmap analysis → **posted to Linear + email**
 
 ### 📈 Sprint Health (Friday 16:00)
-- Per-project health score (0–100) with deductions for stale, at-risk, silent
-- Burn rate: closed vs. active issues
-- Scope creep detection: issues added mid-sprint
+Health scores (0–100) per project — stale issues, scope creep, overdue → **flagged before it becomes a crisis**
 
 ### 🔭 Risk Radar (Friday 16:00)
-- Quiet repos: no commits in 10+ days
-- Stalled projects: >3 in-progress with no update in 5+ days
-- Overloaded members: 5+ open issues, <2 completed in 14d
-- Overdue issues: past due date
-- Orphaned PRs: open >7 days, no reviewers assigned
+Quiet repos (no commits 10d+), overloaded members, orphaned PRs, stalled projects → **proactive, not reactive**
+
+### 🤖 "Low-PM" Mode
+Every repetitive PM task (triage, prioritization, 1:1 prep, status updates, blocker escalation) → **automated through Hermes → Axemaster → Cron scripts**
 
 ---
 
-## 🌐 Web UI (Streamlit)
-
-The built-in Streamlit UI provides:
-
-- **📊 Dashboard** — recent sessions, team status, report history
-- **⚙️ Configuration** — edit `config.yaml` from the browser
-- **📋 Reports** — view generated HTML reports
-- **👥 Team** — team member cards and project map
-- **🔧 Run Reports** — trigger any report on-demand
+## 🖥️ Web UI (Streamlit)
 
 ```
-streamlit run ui/app.py   # starts at http://localhost:8501
+streamlit run ui/app.py
+# → http://localhost:8501
 ```
 
----
-
-## 🔐 Environment Variables
-
-Copy `.env.example` to `.env` and fill in:
-
-| Variable | Description |
-|----------|-------------|
-| `ANTHROPIC_API_KEY` | Claude API key (or use `OPENAI_API_KEY`, etc.) |
-| `GITHUB_TOKEN` | GitHub PAT (or use `gh auth login`) |
-| `LINEAR_API_KEY` | Linear API key |
-| `GOOGLE_API_KEY` | For Gmail/Calendar |
-| `NEWS_API_KEY` | For world news in daily briefing |
-| `TELEGRAM_BOT_TOKEN` | For bot notifications |
-
-> **Never commit `.env`** — it's in `.gitignore`. Use `.env.example` as the template.
+Dashboard with session history, team overview, report viewer, manual report triggers, and config editor.
 
 ---
 
-## ⚙️ Configuration
+## 🔐 Your Keys Stay With You
 
-All settings in `config/config.yaml`:
+- All credentials in `.env` — **never committed to git**
+- `.env` is in `.gitignore` by default
+- API keys never leave your machine (self-hosted)
+- Works fully offline once configured
 
-| Section | What it does |
-|---------|--------------|
-| `email.recipients` | Who gets the weekly report |
-| `github.orgs` | GitHub orgs to scan |
-| `linear.projects` | Map project names → repos + owner |
-| `team` | Team members + GitHub handles |
-| `reporting` | Weekday, timezone, output dir |
+---
+
+## ⚙️ What You Need to Configure
+
+```yaml
+# config/config.yaml — takes 10 minutes to set up
+github:
+  orgs: ["your-org"]
+linear:
+  projects:
+    "My Project":
+      repos: ["your-org/frontend"]
+      owner: "John Doe"
+email:
+  recipients: ["manager@company.com"]
+team:
+  - name: "John Doe"
+    github: "johndoe"
+    email: "john@company.com"
+```
 
 ---
 
@@ -136,31 +89,26 @@ All settings in `config/config.yaml`:
 
 ```
 axeng/
-├── .env.example              # ← copy to .env (gitignored!)
-├── .gitignore
+├── .env.example              ← copy to .env (gitignored!)
+├── config/
+│   └── config.yaml.example  ← copy to config.yaml
 ├── docker/
 │   ├── Dockerfile
 │   └── docker-compose.yml
-├── config/
-│   └── config.yaml.example   # ← copy to config.yaml
 ├── src/
-│   ├── config.py
-│   ├── weekly_report.py
-│   ├── standup-brief.py
+│   ├── standup-brief.py     ← daily brief
 │   ├── one-on-one-pre-read.py
+│   ├── weekly_report.py     ← team report
 │   ├── sprint-health.py
 │   ├── risk-radar.py
 │   ├── team_sync.py
 │   ├── orchestrator.py
-│   ├── project_map.py
-│   └── tools/
+│   └── tools/               ← Linear, GitHub, Calendar integrations
 ├── ui/
-│   └── app.py                # Streamlit web UI
-├── vault/                    # (optional) Obsidian vault
-├── reports/                  # generated HTML reports
-├── requirements.txt
-├── README.md
-└── LICENSE
+│   └── app.py               ← Streamlit dashboard
+├── LICENSE                  ← MIT
+├── CONTRIBUTING.md
+└── README.md
 ```
 
 ---
@@ -168,40 +116,17 @@ axeng/
 ## 🐳 Docker
 
 ```bash
-# Build
-docker compose build
-
-# Run
-docker compose up
-
-# Run in background
+# Start (background)
 docker compose up -d
 
 # View logs
 docker compose logs -f
 
+# Rebuild after code changes
+docker compose build && docker compose up -d
+
 # Stop
 docker compose down
-```
-
-Volume mounts:
-- `./config` → `/app/config` (ro)
-- `./.env` → `/app/.env` (ro)
-- `./vault` → `/app/vault` (optional, Obsidian)
-- `./reports` → `/app/reports` (generated output)
-
----
-
-## ⏰ Scheduling
-
-Run via cron (local) or trigger from the Streamlit UI:
-
-```bash
-# Every Friday at 17:00 Lisbon
-0 17 * * 5 cd /path/to/axeng && python src/weekly_report.py >> var/log/axeng.log 2>&1
-
-# Daily standup brief
-30 7 * * 1-5 cd /path/to/axeng && python src/standup-brief.py >> var/log/axeng.log 2>&1
 ```
 
 ---
@@ -209,22 +134,29 @@ Run via cron (local) or trigger from the Streamlit UI:
 ## 🔧 Requirements
 
 - Python 3.11+
-- `gh` CLI (optional — `gh auth login` for GitHub)
-- API keys: Linear, GitHub, (optionally) Anthropic/OpenAI
+- [GitHub CLI](https://cli.github.com/) (`gh auth login`) or `GITHUB_TOKEN`
+- [Linear](https://linear.app) API key
+- An LLM API key (Anthropic Claude, OpenAI GPT-4, Google Gemini, Groq — any)
+
+---
+
+## 🎤 For Conference Talks / Keynotes
+
+See the [release assets](https://github.com/ruimachado-orbit/axeng/releases) for keynote slides:
+- `axeng-keynote-combined.pptx` — full 13-slide deck (5 intro + 8 tech deep-dive)
+- `axeng-keynote-tech.pptx` — 8 technical slides only
 
 ---
 
 ## 🤝 Contributing
 
-1. Fork the repo
-2. Create a feature branch
-3. Run tests (coming soon)
-4. Open a PR
-
-See `CONTRIBUTING.md` for details.
+1. Fork it
+2. Create your branch: `git checkout -b feat/your-feature`
+3. Run it locally (`streamlit run ui/app.py`)
+4. Open a PR — see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines
 
 ---
 
 ## 📄 License
 
-MIT — use it, hack it, ship it.
+MIT — use it, fork it, build on it. No strings attached.

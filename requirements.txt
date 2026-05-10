@@ -1,4 +1,6 @@
-gh>=2.50.0
+# gh CLI is installed via apt in Dockerfile (system package, not Python)
+# GitHub CLI: https://github.com/cli/cli
+# Or authenticate with: gh auth login
 pyyaml>=6.0
 streamlit>=1.30.0
 anthropic>=0.20.0

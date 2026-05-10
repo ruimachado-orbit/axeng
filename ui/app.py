@@ -41,6 +41,30 @@ def save_config(cfg: dict):
     with open(CONFIG_FILE, "w") as f:
         yaml.dump(cfg, f, default_flow_style=False, sort_keys=False)
 
+
+def ensure_config_shape(cfg: dict) -> dict:
+    cfg = cfg or {}
+    cfg.setdefault("email", {})
+    cfg["email"].setdefault("recipients", [])
+    cfg["email"].setdefault("from", "")
+    cfg.setdefault("github", {})
+    cfg["github"].setdefault("orgs", [])
+    cfg["github"].setdefault("repos", [])
+    cfg["github"].setdefault("name_map", {})
+    cfg["github"].setdefault("ex_members", [])
+    cfg.setdefault("linear", {})
+    cfg["linear"].setdefault("projects", {})
+    cfg["linear"].setdefault("project_ids", {})
+    cfg.setdefault("team", [])
+    cfg.setdefault("reporting", {})
+    return cfg
+
+def rerun():
+    if hasattr(st, "rerun"):
+        st.rerun()
+    else:
+        st.experimental_rerun()
+
 # ── Header ────────────────────────────────────────────────────────
 st.title("🤖 Axeng — EM Accelerator")
 st.caption(f"Session: {datetime.now().strftime('%Y-%m-%d %H:%M')} · Lisbon time")
@@ -224,74 +248,163 @@ elif page == "🧠 LLM Settings":
 # ═══════════════════════════════════════════════════════════════
 elif page == "⚙️ Configuration":
     st.header("⚙️ Configuration")
-    st.info("💡 Edit `config/config.yaml` directly or use the fields below.")
+    st.caption("First-time setup and editable config — no YAML hand-editing required.")
 
-    cfg = load_config()
+    cfg = ensure_config_shape(load_config())
 
-    with st.form("config_editor"):
-        st.subheader("📧 Email")
-        email_recipients = st.text_input(
-            "Recipients (comma-separated)",
-            value=", ".join(cfg.get("email", {}).get("recipients", [])),
-        )
-        email_from = st.text_input(
-            "From address",
-            value=cfg.get("email", {}).get("from", ""),
-        )
+    # Setup Wizard
+    missing_team = len(cfg.get("team", [])) == 0
+    missing_github = len(cfg.get("github", {}).get("orgs", [])) == 0 and len(cfg.get("github", {}).get("repos", [])) == 0
+    missing_linear = len(cfg.get("linear", {}).get("projects", {})) == 0
 
-        st.subheader("🐙 GitHub")
-        gh_orgs = st.text_area(
-            "Organizations (one per line)",
-            value="\n".join(cfg.get("github", {}).get("orgs", [])),
-        )
-        gh_repos = st.text_area(
-            "Additional repos (org/repo format, one per line)",
-            value="\n".join(cfg.get("github", {}).get("repos", [])),
-        )
+    with st.expander("🚀 Setup Wizard — First-time setup", expanded=(missing_team or missing_github or missing_linear)):
+        st.markdown("Configure the minimum needed for Axeng to become useful:")
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Team members", len(cfg.get("team", [])), "✅" if not missing_team else "missing")
+        c2.metric("GitHub sources", len(cfg.get("github", {}).get("orgs", [])) + len(cfg.get("github", {}).get("repos", [])), "✅" if not missing_github else "missing")
+        c3.metric("Linear projects", len(cfg.get("linear", {}).get("projects", {})), "✅" if not missing_linear else "optional")
+        st.info("Recommended path: add team members → add GitHub org/repos → map Linear projects → save.")
 
-        st.subheader("🔗 Linear")
-        linear_projects_raw = cfg.get("linear", {}).get("projects", {})
-        linear_ids_raw = cfg.get("linear", {}).get("project_ids", {})
+    tab_team, tab_github, tab_linear, tab_email, tab_raw = st.tabs([
+        "👥 Team Members", "🐙 GitHub", "🔗 Linear Projects", "📧 Email/Reports", "🧩 Advanced: Raw YAML"
+    ])
 
-        st.write("**Projects configured:**")
-        for proj, info in linear_projects_raw.items():
-            st.code(f"{proj} → owner: {info.get('owner', '?')}, repos: {info.get('repos', [])}")
+    # Team editor
+    with tab_team:
+        st.subheader("👥 Team Members")
+        st.caption("Add everyone Axeng should track. GitHub login is required for activity reports.")
 
-        st.caption("💡 To add Linear projects, edit `config/config.yaml` directly. "
-                   "Get project IDs from Linear URL: `app.linear.app/<workspace>/project/<slug>/<id>`")
-
-        st.subheader("👥 Team")
         team = cfg.get("team", [])
         if team:
-            for member in team:
-                st.markdown(f"- **{member.get('name', '?')}** — `{member.get('github', '?')}`")
+            st.dataframe(team, use_container_width=True, hide_index=True)
         else:
-            st.info("No team members configured.")
+            st.info("No team members yet. Add the first one below.")
 
-        st.warning("⚠️ This form saves to `config/config.yaml`. Back up your file first!",
-                   icon="⚠️")
+        with st.form("add_team_member", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            name = c1.text_input("Name", placeholder="Jane Developer")
+            github = c2.text_input("GitHub login", placeholder="janedev")
+            c3, c4 = st.columns(2)
+            role = c3.text_input("Role", placeholder="Senior Engineer")
+            email = c4.text_input("Email", placeholder="jane@company.com")
+            submitted = st.form_submit_button("➕ Add Team Member", use_container_width=True)
+            if submitted:
+                if not name or not github:
+                    st.error("Name and GitHub login are required.")
+                else:
+                    cfg["team"].append({"name": name, "github": github, "role": role, "email": email})
+                    cfg["github"].setdefault("name_map", {})[github] = name
+                    save_config(cfg)
+                    st.success(f"Added {name}")
+                    rerun()
 
-        if st.form_submit_button("💾 Save Configuration"):
-            new_cfg = {
-                "email": {
-                    "recipients": [r.strip() for r in email_recipients.split(",") if r.strip()],
-                    "from": email_from,
-                },
-                "github": {
-                    "orgs": [o.strip() for o in gh_orgs.split("\n") if o.strip()],
-                    "repos": [r.strip() for r in gh_repos.split("\n") if r.strip()],
-                    "name_map": cfg.get("github", {}).get("name_map", {}),
-                    "ex_members": cfg.get("github", {}).get("ex_members", []),
-                },
-                "linear": {
-                    "projects": linear_projects_raw,
-                    "project_ids": linear_ids_raw,
-                    "issues_per_project": 50,
-                },
-                "reporting": cfg.get("reporting", {}),
-            }
-            save_config(new_cfg)
-            st.success("✅ Configuration saved to `config/config.yaml`!")
+        if team:
+            remove_options = [f"{m.get('name','?')} — {m.get('github','?')}" for m in team]
+            idx = st.selectbox("Remove selected member", list(range(len(remove_options))), format_func=lambda i: remove_options[i])
+            if st.button("🗑️ Remove selected member", use_container_width=True):
+                removed = cfg["team"].pop(idx)
+                gh = removed.get("github")
+                if gh:
+                    cfg["github"].get("name_map", {}).pop(gh, None)
+                save_config(cfg)
+                st.success(f"Removed {removed.get('name', gh)}")
+                rerun()
+
+    # GitHub editor
+    with tab_github:
+        st.subheader("🐙 GitHub Sources")
+        with st.form("github_editor"):
+            gh_orgs = st.text_area("Organizations — one per line", value="\n".join(cfg["github"].get("orgs", [])), placeholder="my-company")
+            gh_repos = st.text_area("Additional repos — org/repo, one per line", value="\n".join(cfg["github"].get("repos", [])), placeholder="my-company/web-app")
+            ex_members = st.text_area("Exclude members/bots — one GitHub login per line", value="\n".join(cfg["github"].get("ex_members", [])), placeholder="dependabot[bot]")
+            if st.form_submit_button("💾 Save GitHub Config", use_container_width=True):
+                cfg["github"]["orgs"] = [x.strip() for x in gh_orgs.splitlines() if x.strip()]
+                cfg["github"]["repos"] = [x.strip() for x in gh_repos.splitlines() if x.strip()]
+                cfg["github"]["ex_members"] = [x.strip() for x in ex_members.splitlines() if x.strip()]
+                save_config(cfg)
+                st.success("GitHub config saved.")
+                rerun()
+
+    # Linear editor
+    with tab_linear:
+        st.subheader("🔗 Linear Projects")
+        projects = cfg["linear"].get("projects", {})
+        project_ids = cfg["linear"].get("project_ids", {})
+        if projects:
+            rows = []
+            for name, info in projects.items():
+                rows.append({
+                    "Project": name,
+                    "Project ID": project_ids.get(name, ""),
+                    "Owner": info.get("owner", ""),
+                    "Repos": ", ".join(info.get("repos", [])),
+                })
+            st.dataframe(rows, use_container_width=True, hide_index=True)
+        else:
+            st.info("No Linear projects mapped yet.")
+
+        with st.form("add_linear_project", clear_on_submit=True):
+            c1, c2 = st.columns(2)
+            project_name = c1.text_input("Project name", placeholder="Frontend")
+            project_id = c2.text_input("Project ID", placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx")
+            c3, c4 = st.columns(2)
+            owner = c3.text_input("Owner", placeholder="Jane Developer")
+            repos = c4.text_input("Repos — comma-separated", placeholder="my-company/web-app, my-company/ui")
+            if st.form_submit_button("➕ Add Linear Project", use_container_width=True):
+                if not project_name:
+                    st.error("Project name is required.")
+                else:
+                    cfg["linear"].setdefault("projects", {})[project_name] = {
+                        "owner": owner,
+                        "repos": [r.strip() for r in repos.split(",") if r.strip()],
+                    }
+                    if project_id:
+                        cfg["linear"].setdefault("project_ids", {})[project_name] = project_id
+                    save_config(cfg)
+                    st.success(f"Added project {project_name}")
+                    rerun()
+
+        if projects:
+            names = list(projects.keys())
+            rm = st.selectbox("Remove Linear project", names)
+            if st.button("🗑️ Remove selected project", use_container_width=True):
+                cfg["linear"].get("projects", {}).pop(rm, None)
+                cfg["linear"].get("project_ids", {}).pop(rm, None)
+                save_config(cfg)
+                st.success(f"Removed {rm}")
+                rerun()
+
+    # Email/reporting editor
+    with tab_email:
+        st.subheader("📧 Email & Reports")
+        with st.form("email_editor"):
+            recipients = st.text_area("Recipients — one email per line", value="\n".join(cfg["email"].get("recipients", [])), placeholder="engineering@company.com")
+            from_email = st.text_input("From address", value=cfg["email"].get("from", ""), placeholder="axeng@company.com")
+            output_dir = st.text_input("Reports output directory", value=cfg.get("reporting", {}).get("output_dir", "reports"))
+            if st.form_submit_button("💾 Save Email/Reports Config", use_container_width=True):
+                cfg["email"]["recipients"] = [x.strip() for x in recipients.splitlines() if x.strip()]
+                cfg["email"]["from"] = from_email
+                cfg.setdefault("reporting", {})["output_dir"] = output_dir
+                save_config(cfg)
+                st.success("Email/reporting config saved.")
+                rerun()
+
+    # Raw YAML escape hatch
+    with tab_raw:
+        st.subheader("🧩 Advanced: Raw YAML")
+        st.warning("Use this if you need full control. Invalid YAML will not be saved.")
+        raw = st.text_area("config/config.yaml", value=yaml.safe_dump(cfg, sort_keys=False, allow_unicode=True), height=500)
+        c1, c2 = st.columns(2)
+        if c1.button("💾 Save Raw YAML", use_container_width=True):
+            try:
+                parsed = yaml.safe_load(raw) or {}
+                save_config(ensure_config_shape(parsed))
+                st.success("Raw YAML saved.")
+                rerun()
+            except Exception as e:
+                st.error(f"Invalid YAML: {e}")
+        if c2.button("⬇️ Download YAML", use_container_width=True):
+            st.download_button("Download config.yaml", raw, file_name="config.yaml", mime="text/yaml")
 
 # ═══════════════════════════════════════════════════════════════
 # REPORTS
@@ -316,31 +429,43 @@ elif page == "📋 Reports":
 elif page == "👥 Team":
     st.header("👥 Team Overview")
 
-    cfg = load_config()
+    cfg = ensure_config_shape(load_config())
     team = cfg.get("team", [])
 
     if not team:
-        st.info("No team members in config. Add them to `config/config.yaml`.")
+        st.info("No team members configured yet.")
+        st.markdown("Go to **⚙️ Configuration → Team Members** to add people directly from the UI.")
+        if st.button("⚙️ Open Configuration", use_container_width=True):
+            st.session_state["nav_hint"] = "configuration"
+            st.toast("Use the sidebar: ⚙️ Configuration")
     else:
         cols = st.columns(min(len(team), 3))
         for i, member in enumerate(team):
             with cols[i % len(cols)]:
-                st.markdown(f"### {member.get('name', '?')}")
-                st.write(f"**GitHub:** `{member.get('github', '?')}`")
-                st.write(f"**Role:** {member.get('role', '—')}")
-                st.write(f"**Email:** {member.get('email', '—')}")
+                st.container(border=True).markdown(
+                    f"### {member.get('name', '?')}\n"
+                    f"**GitHub:** `{member.get('github', '?')}`  \n"
+                    f"**Role:** {member.get('role', '—')}  \n"
+                    f"**Email:** {member.get('email', '—')}"
+                )
 
     st.divider()
     st.subheader("🔗 Linear ↔ GitHub Project Map")
     projects = cfg.get("linear", {}).get("projects", {})
+    project_ids = cfg.get("linear", {}).get("project_ids", {})
     if projects:
         data = []
         for name, info in projects.items():
             repos = ", ".join(info.get("repos", []))
-            data.append({"Project": name, "Owner": info.get("owner", "?"), "Repos": repos})
+            data.append({
+                "Project": name,
+                "Project ID": project_ids.get(name, ""),
+                "Owner": info.get("owner", "?"),
+                "Repos": repos,
+            })
         st.dataframe(data, use_container_width=True, hide_index=True)
     else:
-        st.info("No projects configured.")
+        st.info("No projects configured yet. Add them in **⚙️ Configuration → Linear Projects**.")
 
 # ═══════════════════════════════════════════════════════════════
 # RUN REPORTS

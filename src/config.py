@@ -3,6 +3,7 @@
 Team Intel — Configuration Loader
 Loads config.yaml, provides dot-notation access to settings.
 """
+from __future__ import annotations
 import os, sys, yaml
 from pathlib import Path
 
@@ -123,3 +124,21 @@ def llm_temperature() -> float:
 
 def llm_model(provider: str) -> str:
     return get(f"llm.{provider}.model") or os.environ.get(f"{provider.upper()}_MODEL", "")
+
+
+# ── Backward-compat constants (for legacy scripts) ────────────────────────────
+# Scripts that import: from config import GITHUB_ORGS, EX_MEMBERS, ...
+# These are just aliases / computed values over the function API.
+def _legacy_consts():
+    global GITHUB_ORGS, EX_MEMBERS, GITHUB_NAME_MAP
+    global LINEAR_PROJECT_IDS, LINEAR_GITHUB_MAP, RECIPIENTS
+
+    GITHUB_ORGS = github_orgs()
+    EX_MEMBERS = ex_members()
+    GITHUB_NAME_MAP = github_name_map()
+    LINEAR_PROJECT_IDS = linear_project_ids()
+    LINEAR_GITHUB_MAP = linear_github_map()
+    RECIPIENTS = recipients()
+
+
+_legacy_consts()

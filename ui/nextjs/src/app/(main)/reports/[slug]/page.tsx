@@ -135,6 +135,27 @@ export default function ReportDetailPage() {
 
   const copyContent = () => {
     navigator.clipboard.writeText(report.content)
+    alert('Relatório copiado')
+  }
+
+  const shareReport = () => {
+    const url = typeof window !== 'undefined' ? window.location.href : ''
+    if (navigator.share) {
+      navigator.share({ title: report.title, text: report.summary, url })
+    } else {
+      navigator.clipboard.writeText(url)
+      alert('Link copiado')
+    }
+  }
+
+  const downloadReport = () => {
+    const blob = new Blob([report.content], { type: 'text/markdown;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${slug || 'report'}.md`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   return (
@@ -168,13 +189,13 @@ export default function ReportDetailPage() {
               <Copy className="w-4 h-4" />
               Copiar
             </button>
-            <button className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium rounded-xl transition-colors">
+            <button onClick={shareReport} className="inline-flex items-center gap-1.5 px-3.5 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 text-sm font-medium rounded-xl transition-colors">
               <Share2 className="w-4 h-4" />
               Enviar
             </button>
-            <button className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm">
+            <button onClick={downloadReport} className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-xl transition-colors shadow-sm">
               <Download className="w-4 h-4" />
-              PDF
+              Markdown
             </button>
           </div>
         </div>

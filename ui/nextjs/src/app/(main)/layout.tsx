@@ -1,5 +1,6 @@
 import { Sidebar } from '@/components/sidebar'
-import { Bell, Search, Zap } from 'lucide-react'
+import { Bell, Search } from 'lucide-react'
+import Link from 'next/link'
 
 export default function MainLayout({ children }: { children: React.ReactNode }) {
   const now = new Date()
@@ -20,13 +21,13 @@ export default function MainLayout({ children }: { children: React.ReactNode }) 
             </span>
           </div>
           <div className="flex items-center gap-2">
-            <button className="p-2 rounded-xl hover:bg-white/60 glass-hover text-slate-500 hover:text-indigo-600 transition-all duration-200">
+            <Link href="/logs" className="p-2 rounded-xl hover:bg-white/60 glass-hover text-slate-500 hover:text-indigo-600 transition-all duration-200">
               <Search className="w-4 h-4" />
-            </button>
-            <button className="p-2 rounded-xl hover:bg-white/60 glass-hover text-slate-500 hover:text-indigo-600 transition-all duration-200 relative">
+            </Link>
+            <Link href="/logs" className="p-2 rounded-xl hover:bg-white/60 glass-hover text-slate-500 hover:text-indigo-600 transition-all duration-200 relative">
               <Bell className="w-4 h-4" />
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
-            </button>
+            </Link>
           </div>
         </header>
 

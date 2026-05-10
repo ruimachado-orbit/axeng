@@ -289,10 +289,19 @@ export default function TeamPage() {
             </div>
 
             <div className="flex gap-3 mt-5">
-              <Button size="sm" className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:opacity-90 text-white text-xs shadow-lg shadow-indigo-500/20">
+              <Button
+                size="sm"
+                onClick={() => window.location.href = `/reports/1on1-${selectedMember.name.split(' ')[0].toLowerCase()}-2026-05-08`}
+                className="bg-gradient-to-r from-indigo-500 to-purple-600 hover:opacity-90 text-white text-xs shadow-lg shadow-indigo-500/20"
+              >
                 <MessageSquare className="w-3.5 h-3.5 mr-1.5" /> Gerar 1:1 Pre-read
               </Button>
-              <Button size="sm" variant="outline" className="text-xs glass-hover">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => window.open(`https://linear.app/maiolabs/search?q=${encodeURIComponent(selectedMember.linear)}`, '_blank')}
+                className="text-xs glass-hover"
+              >
                 Ver Linear
               </Button>
             </div>

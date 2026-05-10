@@ -76,6 +76,13 @@ const tabIcons = { llm: Bot, integrations: Link2, cron: Clock, api: Key }
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('llm')
+  const [cronState, setCronState] = useState<Record<string, string>>({})
+
+  const statusFor = (name: string, fallback: string) => cronState[name] ?? fallback
+  const toggleCron = (name: string, fallback: string) => {
+    const current = statusFor(name, fallback)
+    setCronState(prev => ({ ...prev, [name]: current === 'active' ? 'paused' : 'active' }))
+  }
 
   const tabs = [
     { value: 'llm',          label: 'LLM',          icon: Bot },
@@ -163,7 +170,12 @@ export default function SettingsPage() {
                   {p.status === 'connected' && (
                     <div className="mt-3 flex items-center justify-between">
                       <span className="text-xs text-muted-foreground">Provider active</span>
-                      <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => setActiveTab('api')}
+                        className="h-7 text-xs gap-1 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                      >
                         Configure <ChevronRight className="w-3 h-3" />
                       </Button>
                     </div>
@@ -203,7 +215,12 @@ export default function SettingsPage() {
                         </div>
                       )}
                     </div>
-                    <Button size="sm" variant="outline" className="h-8 text-xs glass-hover">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setActiveTab('api')}
+                      className="h-8 text-xs glass-hover"
+                    >
                       Manage
                     </Button>
                   </div>
@@ -220,7 +237,7 @@ export default function SettingsPage() {
               <CardContent className="p-4">
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-4 min-w-0">
-                    <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${j.status === 'active' ? 'bg-green-500 animate-pulse shadow-lg shadow-green-500/40' : 'bg-slate-400'}`} />
+                    <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${statusFor(j.name, j.status) === 'active' ? 'bg-green-500 animate-pulse shadow-lg shadow-green-500/40' : 'bg-slate-400'}`} />
                     <div className="min-w-0">
                       <p className="font-medium text-sm">{j.name}</p>
                       <p className="text-xs text-muted-foreground font-mono">{j.schedule}</p>
@@ -234,10 +251,11 @@ export default function SettingsPage() {
                     )}
                     <Button
                       size="sm"
-                      variant={j.status === 'active' ? 'outline' : 'default'}
-                      className={`h-8 text-xs glass-hover ${j.status === 'active' ? '' : 'badge-glow text-white border-0'}`}
+                      variant={statusFor(j.name, j.status) === 'active' ? 'outline' : 'default'}
+                      onClick={() => toggleCron(j.name, j.status)}
+                      className={`h-8 text-xs glass-hover ${statusFor(j.name, j.status) === 'active' ? '' : 'badge-glow text-white border-0'}`}
                     >
-                      {j.status === 'active' ? (
+                      {statusFor(j.name, j.status) === 'active' ? (
                         <><RefreshCw className="w-3 h-3 mr-1" /> Pause</>
                       ) : (
                         'Resume'
@@ -276,10 +294,20 @@ export default function SettingsPage() {
                     <p className="text-xs text-muted-foreground font-mono">{k.key}</p>
                   </div>
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="h-7 text-xs glass-hover">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => alert(`${k.name}: edit config/config.yaml or ~/.hermes/.env. Secrets are intentionally not editable in-browser.`)}
+                      className="h-7 text-xs glass-hover"
+                    >
                       Update
                     </Button>
-                    <Button size="sm" variant="ghost" className="h-7 w-7 p-0">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => window.open(`https://${k.hint}`, '_blank')}
+                      className="h-7 w-7 p-0"
+                    >
                       <ExternalLink className="w-3.5 h-3.5 text-muted-foreground" />
                     </Button>
                   </div>

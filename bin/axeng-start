@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Axeng — Start the agent
+# Usage: axeng
+set -e
+
+# Resolve to Cellar prefix (works whether called via symlink or directly)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+AXENG_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+
+cd "$AXENG_DIR"
+
+if [ ! -f .env ]; then
+  echo "⚠️  No .env file. Copy .env.example to .env and fill in your keys first."
+  exit 1
+fi
+
+if [ ! -f config/config.yaml ]; then
+  cp config/config.yaml.example config/config.yaml
+  echo "📝 Created config/config.yaml from example — edit it with your orgs and team."
+fi
+
+echo "🚀 Starting Axeng..."
+docker compose -f docker/docker-compose.yml up -d
+echo ""
+echo "✅ Axeng is running at http://localhost:8501"
+echo "   Logs: axeng-logs"

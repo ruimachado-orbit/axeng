@@ -19,6 +19,7 @@ RUN pip install --no-cache-dir streamlit
 COPY src/ ./src/
 COPY config/ ./config/
 COPY ui/ ./ui/
+COPY bin/ ./bin/
 
 # ── Entry point ───────────────────────────────────────────────
 ENV PYTHONPATH=/app/src

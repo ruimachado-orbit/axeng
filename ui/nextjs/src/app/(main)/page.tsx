@@ -1,171 +1,180 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import Link from 'next/link'
+import {
+  Users, Rocket, Tag, GitPullRequest, AlertOctagon,
+  TrendingUp, TrendingDown, Minus, Clock, Activity, ChevronRight,
+  RefreshCw, CheckCircle2, XCircle, ArrowUpRight
+} from 'lucide-react'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Separator } from '@/components/ui/separator'
+
+interface Project { name: string; score: number; trend: string; open: number; done: number }
+interface TeamMember { name: string; role: string; avatar: string; status: string }
+interface LogEntry { id: number; action: string; details: string; type: string; timestamp: string; level: string }
 
 interface DashboardData {
   stats: { teamSize: number; activeProjects: number; openIssues: number; prsReviewPending: number; blockedItems: number }
-  projects: Array<{ name: string; score: number; trend: string; open: number; done: number }>
-  teamStatus: Array<{ name: string; role: string; avatar: string; status: string }>
+  projects: Project[]
+  teamStatus: TeamMember[]
   lastSync: string
 }
 
-const fallback: DashboardData = {
-  stats: { teamSize: 7, activeProjects: 11, openIssues: 38, prsReviewPending: 4, blockedItems: 2 },
-  projects: [
-    { name: 'Orbit', score: 88, trend: 'up', open: 12, done: 9 },
-    { name: 'Compass', score: 72, trend: 'down', open: 18, done: 11 },
-    { name: 'WareAI', score: 95, trend: 'stable', open: 6, done: 5 },
-    { name: 'Phoenix', score: 64, trend: 'down', open: 9, done: 4 },
-    { name: 'Brain', score: 81, trend: 'up', open: 14, done: 10 },
-  ],
-  teamStatus: [
-    { name: 'Pedro Ferreira', role: 'Backend', avatar: 'PF', status: 'active' },
-    { name: 'Diogo Oliveira', role: 'DevOps', avatar: 'DO', status: 'active' },
-    { name: 'Anastasiia M.', role: 'Frontend', avatar: 'AM', status: 'active' },
-    { name: 'João FCSantos', role: 'Engineering', avatar: 'JF', status: 'ooo' },
-    { name: 'Rikkarth R.', role: 'ML/AI', avatar: 'RR', status: 'active' },
-    { name: 'Daniel Almeida', role: 'CEO', avatar: 'DA', status: 'active' },
-    { name: 'Luis Santos', role: 'Co-founder', avatar: 'LS', status: 'active' },
-  ],
-  lastSync: '',
-}
-
-const recentActivity = [
-  { time: '09:42', agent: 'Axemaster', action: 'Gerou standup brief para a equipa', type: 'report' },
-  { time: '09:38', agent: 'Axemaster', action: 'Sincronizou estado do Linear — 3 issues atualizadas', type: 'sync' },
-  { time: '09:30', agent: 'Axemaster', action: 'Detetou João FCSantos em modo OOO até Sexta', type: 'team' },
-  { time: '09:15', agent: 'Axemaster', action: 'Enviou briefing para Telegram — 3 items pendentes', type: 'delivery' },
-  { time: '08:55', agent: 'Axemaster', action: 'Reviu PR #847 em orbit-health — aprovado', type: 'review' },
+const statCards = [
+  { key: 'teamSize', label: 'Team Size', icon: Users, color: 'text-violet-600', bg: 'bg-violet-50' },
+  { key: 'activeProjects', label: 'Projects', icon: Rocket, color: 'text-blue-600', bg: 'bg-blue-50' },
+  { key: 'openIssues', label: 'Open Issues', icon: Tag, color: 'text-amber-600', bg: 'bg-amber-50' },
+  { key: 'prsReviewPending', label: 'PRs Waiting', icon: GitPullRequest, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+  { key: 'blockedItems', label: 'Blocked', icon: AlertOctagon, color: 'text-rose-600', bg: 'bg-rose-50' },
 ]
+
+const trendIcon = (t: string) => t === 'up' ? TrendingUp : t === 'down' ? TrendingDown : Minus
+const trendColor = (t: string) => t === 'up' ? 'text-emerald-600' : t === 'down' ? 'text-rose-600' : 'text-slate-400'
+const scoreColor = (s: number) => s >= 80 ? 'text-emerald-600' : s >= 60 ? 'text-amber-600' : 'text-rose-600'
+const scoreBar = (s: number) => s >= 80 ? 'bg-emerald-500' : s >= 60 ? 'bg-amber-400' : 'bg-rose-500'
+const statusDot = (s: string) => s === 'active' ? 'bg-emerald-500' : s === 'ooo' ? 'bg-amber-400' : 'bg-slate-300'
+const logTypeColor = (t: string) => t === 'report' ? 'text-blue-600' : t === 'sync' ? 'text-emerald-600' : t === 'delivery' ? 'text-violet-600' : t === 'review' ? 'text-amber-600' : 'text-slate-500'
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null)
+  const [logs, setLogs] = useState<LogEntry[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    fetch('/api/dashboard')
-      .then(r => r.ok ? r.json() : null)
-      .then(d => { setData(d); setLoading(false) })
-      .catch(() => { setData(fallback); setLoading(false) })
+    Promise.all([
+      fetch('/api/dashboard').then(r => r.ok ? r.json() : null),
+      fetch('/api/logs?limit=8').then(r => r.ok ? r.json() : null),
+    ]).then(([d, l]) => {
+      setData(d)
+      setLogs(l?.logs || [])
+      setLoading(false)
+    }).catch(() => setLoading(false))
   }, [])
-
-  const trendIcon = (t: string) => t === 'up' ? '↑' : t === 'down' ? '↓' : '→'
-  const trendColor = (t: string) => t === 'up' ? 'text-green-600' : t === 'down' ? 'text-red-500' : 'text-slate-400'
-  const statusColor = (s: string) => s === 'active' ? 'bg-green-500' : s === 'ooo' ? 'bg-amber-400' : 'bg-slate-300'
-  const scoreColor = (s: number) => s >= 80 ? 'text-green-600' : s >= 60 ? 'text-amber-600' : 'text-red-600'
-  const scoreBar = (s: number) => s >= 80 ? 'bg-green-500' : s >= 60 ? 'bg-amber-400' : 'bg-red-500'
 
   return (
     <div className="space-y-6">
       {/* Stats row */}
       {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Card key={i} className="bg-white"><CardContent className="pt-4 pb-3">
-              <Skeleton className="h-8 w-12" /><Skeleton className="h-4 w-20 mt-2" />
-            </CardContent></Card>
+            <div key={i} className="bg-white rounded-2xl border border-slate-200 p-4">
+              <Skeleton className="h-8 w-10" />
+              <Skeleton className="h-4 w-16 mt-2" />
+            </div>
           ))}
         </div>
       ) : data ? (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-          {[
-            { label: 'Team Size', value: data.stats.teamSize, emoji: '👥' },
-            { label: 'Projects', value: data.stats.activeProjects, emoji: '🚀' },
-            { label: 'Open Issues', value: data.stats.openIssues, emoji: '📌' },
-            { label: 'PRs Waiting', value: data.stats.prsReviewPending, emoji: '🔀' },
-            { label: 'Blocked', value: data.stats.blockedItems, emoji: '🚧' },
-          ].map((stat) => (
-            <Card key={stat.label} className="bg-white">
-              <CardContent className="pt-4 pb-3">
-                <div className="text-2xl font-bold text-slate-900">{stat.value}</div>
-                <div className="flex items-center gap-1.5 mt-1">
-                  <span className="text-base">{stat.emoji}</span>
-                  <span className="text-slate-500 text-sm">{stat.label}</span>
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          {statCards.map(s => {
+            const Icon = s.icon
+            const value = (data.stats as any)[s.key]
+            return (
+              <div key={s.key} className="bg-white rounded-2xl border border-slate-200 p-4 hover:border-slate-300 transition-colors">
+                <div className={`inline-flex items-center justify-center w-10 h-10 rounded-xl ${s.bg} mb-3`}>
+                  <Icon className={`w-5 h-5 ${s.color}`} />
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+                <div className="text-2xl font-bold text-slate-900">{value}</div>
+                <div className="text-xs text-slate-500 mt-0.5">{s.label}</div>
+              </div>
+            )
+          })}
         </div>
       ) : null}
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         {/* Sprint Health */}
-        <Card className="lg:col-span-2 bg-white">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base">Sprint Health</CardTitle>
-              {data?.lastSync && (
-                <span className="text-xs text-slate-400">Sincronizado: {new Date(data.lastSync).toLocaleTimeString('pt-PT')}</span>
-              )}
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-base font-semibold text-slate-900">Sprint Health</h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                {data?.projects.filter(p => p.score >= 80).length}/{data?.projects.length || 0} projects on track
+              </p>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {(data?.projects || fallback.projects).map((p) => (
-                <div key={p.name} className="flex items-center gap-4">
-                  <div className="w-20 text-sm font-medium text-slate-700">{p.name}</div>
-                  <div className="flex-1 h-2 rounded-full bg-slate-100">
-                    <div className={`h-2 rounded-full transition-all ${scoreBar(p.score)}`} style={{ width: `${p.score}%` }} />
+            {data?.lastSync && (
+              <div className="flex items-center gap-1.5 text-xs text-slate-400">
+                <RefreshCw className="w-3 h-3" />
+                {new Date(data.lastSync).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+              </div>
+            )}
+          </div>
+          <div className="space-y-3">
+            {(data?.projects || []).map((p) => {
+              const TrendIcon = trendIcon(p.trend)
+              return (
+                <div key={p.name} className="flex items-center gap-3 py-1">
+                  <span className="text-sm font-medium text-slate-700 w-24 truncate">{p.name}</span>
+                  <div className="flex-1 h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                    <div className={`h-full rounded-full transition-all ${scoreBar(p.score)}`} style={{ width: `${p.score}%` }} />
                   </div>
-                  <div className={`w-12 text-right text-sm font-semibold ${scoreColor(p.score)}`}>{p.score}</div>
-                  <div className={`text-sm ${trendColor(p.trend)}`}>{trendIcon(p.trend)}</div>
-                  <div className="text-xs text-slate-400 w-16 text-right">{p.done}/{p.open + p.done || p.open}</div>
+                  <span className={`text-sm font-semibold w-10 text-right ${scoreColor(p.score)}`}>{p.score}</span>
+                  <TrendIcon className={`w-4 h-4 flex-shrink-0 ${trendColor(p.trend)}`} />
+                  <span className="text-xs text-slate-400 w-16 text-right">{p.done}/{p.open + p.done || '—'}</span>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+              )
+            })}
+          </div>
+        </div>
 
         {/* Team Status */}
-        <Card className="bg-white">
-          <CardHeader><CardTitle className="text-base">Team Status</CardTitle></CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {(data?.teamStatus || fallback.teamStatus).map((m) => (
-                <div key={m.name} className="flex items-center gap-3">
-                  <div className="relative">
-                    <Avatar className="w-8 h-8">
-                      <AvatarFallback className="bg-slate-200 text-slate-600 text-xs">{m.avatar}</AvatarFallback>
-                    </Avatar>
-                    <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${statusColor(m.status)}`} />
+        <div className="bg-white rounded-2xl border border-slate-200 p-5">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-base font-semibold text-slate-900">Team Status</h2>
+            <Link href="/team" className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
+              Ver todos <ChevronRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <div className="space-y-3">
+            {(data?.teamStatus || []).map((m) => (
+              <div key={m.name} className="flex items-center gap-3">
+                <div className="relative flex-shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-xs font-semibold text-slate-600">
+                    {m.avatar}
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-slate-900 truncate">{m.name}</p>
-                    <p className="text-xs text-slate-500">{m.role}</p>
-                  </div>
-                  <Badge variant={m.status === 'ooo' ? 'default' : 'secondary'} className="text-xs">
-                    {m.status === 'ooo' ? 'OOO' : 'Active'}
-                  </Badge>
+                  <span className={`absolute bottom-0 right-0 w-2.5 h-2.5 rounded-full border-2 border-white ${statusDot(m.status)}`} />
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Recent Agent Activity */}
-      <Card className="bg-white">
-        <CardHeader><CardTitle className="text-base">Recent Agent Activity</CardTitle></CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {recentActivity.map((a, i) => (
-              <div key={i} className="flex items-start gap-3 py-2">
-                <span className="text-slate-400 text-xs font-mono w-10">{a.time}</span>
-                <div className="w-0.5 h-full min-h-[20px] bg-slate-200 rounded-full self-center mr-2" />
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="text-xs font-mono">Axemaster</Badge>
-                  <span className="text-xs text-slate-500">{a.action}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-slate-900 truncate">{m.name}</p>
+                  <p className="text-xs text-slate-500">{m.role}</p>
                 </div>
+                {m.status === 'ooo' && (
+                  <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">OOO</span>
+                )}
               </div>
             ))}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      {/* Recent Activity */}
+      <div className="bg-white rounded-2xl border border-slate-200 p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-slate-400" />
+            <h2 className="text-base font-semibold text-slate-900">Agent Activity</h2>
+          </div>
+          <Link href="/logs" className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1">
+            Ver logs <ChevronRight className="w-3 h-3" />
+          </Link>
+        </div>
+        <div className="space-y-0">
+          {logs.length === 0 && !loading && (
+            <div className="text-center py-8 text-slate-400 text-sm">Nenhuma atividade registada ainda.</div>
+          )}
+          {logs.map((l, i) => (
+            <div key={l.id} className="flex items-start gap-3 py-3 border-b border-slate-100 last:border-0">
+              <div className={`w-1.5 h-1.5 rounded-full mt-2 flex-shrink-0 bg-slate-300`} />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm text-slate-700">{l.action}</p>
+                {l.details && <p className="text-xs text-slate-400 mt-0.5 truncate">{l.details}</p>}
+              </div>
+              <span className="text-xs text-slate-400 flex-shrink-0">
+                {new Date(l.timestamp).toLocaleTimeString('pt-PT', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   )
 }

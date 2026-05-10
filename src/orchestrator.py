@@ -176,12 +176,13 @@ def llm_synthesize(goal: str, tool_results: list, provider: str = None) -> str:
         "When data is missing, say so — don't make things up."
     )
 
+    vault_section = f"Vault Context:\n{vault_context}" if vault_context else ""
     prompt = f"""Goal: {goal}
 
 Tool Results:
 {results_text}
 
-{f'Vault Context:\n{vault_context}' if vault_context else ''}
+{vault_section}
 
 Synthesize a clear, actionable response to the goal above. """
     if "summary" in goal.lower() or "team" in goal.lower() or "equipa" in goal.lower():

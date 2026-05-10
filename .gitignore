@@ -74,3 +74,7 @@ config/config.yaml
 # Secrets (generic)
 secrets/
 *.secret
+# Python cache
+__pycache__/
+*.py[cod]
+.pytest_cache/

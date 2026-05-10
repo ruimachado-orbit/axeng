@@ -1,0 +1,49 @@
+services:
+  axeng:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: axeng
+    restart: unless-stopped
+    volumes:
+      # Mount your config and .env
+      - ./config:/app/config:ro
+      - ./.env:/app/.env:ro
+
+      # Optional: persist Obsidian vault
+      - ./vault:/app/vault
+
+      # Optional: persist generated reports
+      - ./reports:/app/reports
+
+      # GitHub CLI auth (so you don't need GITHUB_TOKEN env var)
+      - ~/.config/gh:/root/.config/gh:ro
+    environment:
+      - PYTHONPATH=/app/src
+    env_file:
+      - .env
+    command: >
+      sh -c "
+        # Copy config if not exists
+        cp config/config.yaml.example config/config.yaml 2>/dev/null || true;
+
+        # Start the Streamlit UI (default)
+        streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0
+      "
+    ports:
+      - "8501:8501"
+
+  # Optional: PostgreSQL for multi-user mode
+  # postgres:
+  #   image: postgres:16-alpine
+  #   environment:
+  #     POSTGRES_DB: axeng
+  #     POSTGRES_USER: axeng
+  #     POSTGRES_PASSWORD: changeme
+  #   volumes:
+  #     - pgdata:/var/lib/postgresql/data
+  #   ports:
+  #     - "5432:5432"
+
+# volumes:
+#   pgdata:

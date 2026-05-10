@@ -1,12 +1,50 @@
 # Axeng — Engineering Manager Accelerator 🤖
 
-**Autonomous engineering intelligence agent** — monitors GitHub, Linear, and team activity, generates daily briefs, and keeps your Obsidian vault in sync.
+**Open source autonomous engineering intelligence agent** — monitors GitHub, Linear, and team activity, generates daily briefs, and keeps your team in sync.
 
 Built for engineering leaders who want to know what's shipping, who's blocked, and where the roadmap stands — without asking.
 
 ---
 
-## Features
+## ⚡ Quick Start (Docker)
+
+```bash
+git clone https://github.com/ruimachado-orbit/axeng.git
+cd axeng
+
+# 1. Copy and fill in your environment variables
+cp .env.example .env
+nano .env   # add your API keys
+
+# 2. Copy and configure
+cp config/config.yaml.example config/config.yaml
+nano config/config.yaml   # add your team, repos, Linear project IDs
+
+# 3. Run
+docker compose up
+```
+
+Open **http://localhost:8501** — you'll see the dashboard and can trigger reports from the UI.
+
+---
+
+## ⚡ Quick Start (Local / Dev)
+
+```bash
+git clone https://github.com/ruimachado-orbit/axeng.git
+cd axeng
+
+pip install -r requirements.txt
+
+cp .env.example .env
+cp config/config.yaml.example config/config.yaml
+
+streamlit run ui/app.py
+```
+
+---
+
+## ✨ Features
 
 ### 🏃 Daily Standup Brief (Mon–Fri 07:30)
 - What shipped yesterday
@@ -33,20 +71,10 @@ Built for engineering leaders who want to know what's shipping, who's blocked, a
 - Fetches GitHub activity → stores in Obsidian vault
 - Builds team member profiles over time
 
-### 🧠 Query Engine
-- "Who's been touching the backend repo this week?"
-- "Show me the last PRs from João"
-- "What blockers do we have in Linear?"
-
-### 🔧 Linear Integration
-- Sync issues, post weekly updates to projects
-- Idempotent writes — running the report twice produces one clean update
-
 ### 📈 Sprint Health (Friday 16:00)
 - Per-project health score (0–100) with deductions for stale, at-risk, silent
 - Burn rate: closed vs. active issues
 - Scope creep detection: issues added mid-sprint
-- Stale issue list across all projects
 
 ### 🔭 Risk Radar (Friday 16:00)
 - Quiet repos: no commits in 10+ days
@@ -57,84 +85,146 @@ Built for engineering leaders who want to know what's shipping, who's blocked, a
 
 ---
 
-## Quick Start
-cp config/config.example.yaml config/config.yaml
-# Edit config.yaml with your team, repos, and credentials
+## 🌐 Web UI (Streamlit)
+
+The built-in Streamlit UI provides:
+
+- **📊 Dashboard** — recent sessions, team status, report history
+- **⚙️ Configuration** — edit `config.yaml` from the browser
+- **📋 Reports** — view generated HTML reports
+- **👥 Team** — team member cards and project map
+- **🔧 Run Reports** — trigger any report on-demand
+
+```
+streamlit run ui/app.py   # starts at http://localhost:8501
 ```
 
-### 3. Run
+---
+
+## 🔐 Environment Variables
+
+Copy `.env.example` to `.env` and fill in:
+
+| Variable | Description |
+|----------|-------------|
+| `ANTHROPIC_API_KEY` | Claude API key (or use `OPENAI_API_KEY`, etc.) |
+| `GITHUB_TOKEN` | GitHub PAT (or use `gh auth login`) |
+| `LINEAR_API_KEY` | Linear API key |
+| `GOOGLE_API_KEY` | For Gmail/Calendar |
+| `NEWS_API_KEY` | For world news in daily briefing |
+| `TELEGRAM_BOT_TOKEN` | For bot notifications |
+
+> **Never commit `.env`** — it's in `.gitignore`. Use `.env.example` as the template.
+
+---
+
+## ⚙️ Configuration
+
+All settings in `config/config.yaml`:
+
+| Section | What it does |
+|---------|--------------|
+| `email.recipients` | Who gets the weekly report |
+| `github.orgs` | GitHub orgs to scan |
+| `linear.projects` | Map project names → repos + owner |
+| `team` | Team members + GitHub handles |
+| `reporting` | Weekday, timezone, output dir |
+
+---
+
+## 📁 Project Structure
+
+```
+axeng/
+├── .env.example              # ← copy to .env (gitignored!)
+├── .gitignore
+├── docker/
+│   ├── Dockerfile
+│   └── docker-compose.yml
+├── config/
+│   └── config.yaml.example   # ← copy to config.yaml
+├── src/
+│   ├── config.py
+│   ├── weekly_report.py
+│   ├── standup-brief.py
+│   ├── one-on-one-pre-read.py
+│   ├── sprint-health.py
+│   ├── risk-radar.py
+│   ├── team_sync.py
+│   ├── orchestrator.py
+│   ├── project_map.py
+│   └── tools/
+├── ui/
+│   └── app.py                # Streamlit web UI
+├── vault/                    # (optional) Obsidian vault
+├── reports/                  # generated HTML reports
+├── requirements.txt
+├── README.md
+└── LICENSE
+```
+
+---
+
+## 🐳 Docker
 
 ```bash
-python src/weekly_report.py
+# Build
+docker compose build
+
+# Run
+docker compose up
+
+# Run in background
+docker compose up -d
+
+# View logs
+docker compose logs -f
+
+# Stop
+docker compose down
 ```
 
-Add a cron job (recommended):
+Volume mounts:
+- `./config` → `/app/config` (ro)
+- `./.env` → `/app/.env` (ro)
+- `./vault` → `/app/vault` (optional, Obsidian)
+- `./reports` → `/app/reports` (generated output)
+
+---
+
+## ⏰ Scheduling
+
+Run via cron (local) or trigger from the Streamlit UI:
 
 ```bash
 # Every Friday at 17:00 Lisbon
-0 17 * * 5 cd /path/to/team-intel && python src/weekly_report.py >> /var/log/team-intel.log 2>&1
+0 17 * * 5 cd /path/to/axeng && python src/weekly_report.py >> var/log/axeng.log 2>&1
+
+# Daily standup brief
+30 7 * * 1-5 cd /path/to/axeng && python src/standup-brief.py >> var/log/axeng.log 2>&1
 ```
 
 ---
 
-## Configuration
-
-All settings live in `config/config.yaml`. The agent reads:
-
-| Field | What it does |
-|---|---|
-| `github.orgs` | GitHub orgs to monitor |
-| `github.repos` | Specific repos to include |
-| `linear.workspace` | Linear workspace name |
-| `linear.project_ids` | Map project names to Linear IDs |
-| `team` | Team members + GitHub handles |
-| `email.recipients` | Who gets the weekly report |
-| `email.from` | Sender address |
-
----
-
-## Architecture
-
-```
-team-intel/
-├── config/
-│   └── config.yaml.example    # Configuration (copy to config.yaml)
-├── src/
-│   ├── config.py              # Config loader
-│   ├── weekly_report.py       # Weekly report + Linear updates (main entry)
-│   ├── standup-brief.py       # Daily standup brief (07:30 Mon-Fri)
-│   ├── one-on-one-pre-read.py # 1:1 pre-read generator
-│   ├── sprint-health.py       # Sprint health scores (Friday)
-│   ├── risk-radar.py          # Risk radar scan (Friday)
-│   ├── team_sync.py           # Daily sync engine → Obsidian
-│   ├── orchestrator.py         # Natural language query router
-│   ├── tools/
-│   │   ├── github_activity.py  # GitHub data fetcher
-│   │   ├── linear_tool.py     # Linear API client
-│   │   ├── calendar_insights.py
-│   │   └── team_query.py      # Obsidian vault queries
-│   └── project_map.py          # Linear ↔ GitHub repo mapping
-├── reports/                    # Generated HTML reports
-├── tests/
-│   └── test_weekly_report.py
-├── README.md
-├── requirements.txt
-├── setup.sh                    # Interactive setup script
-└── CONTRIBUTING.md
-```
-
----
-
-## Requirements
+## 🔧 Requirements
 
 - Python 3.11+
-- `gh` CLI (GitHub auth: `gh auth login`)
-- GitHub API token (via `gh auth` or `GITHUB_TOKEN` env var)
-- Linear API key (`LINEAR_API_KEY` env var or `config.yaml`)
-- Optional: Obsidian vault for daily sync
+- `gh` CLI (optional — `gh auth login` for GitHub)
+- API keys: Linear, GitHub, (optionally) Anthropic/OpenAI
 
 ---
 
-## License
+## 🤝 Contributing
 
-MIT
+1. Fork the repo
+2. Create a feature branch
+3. Run tests (coming soon)
+4. Open a PR
+
+See `CONTRIBUTING.md` for details.
+
+---
+
+## 📄 License
+
+MIT — use it, hack it, ship it.

@@ -10,6 +10,9 @@ services:
       - ./config:/app/config:ro
       - ./.env:/app/.env:ro
 
+      # Convenience scripts (axeng-start/stop/logs/update)
+      - ./bin:/app/bin:ro
+
       # Optional: persist Obsidian vault
       - ./vault:/app/vault
 
@@ -18,6 +21,9 @@ services:
 
       # GitHub CLI auth (so you don't need GITHUB_TOKEN env var)
       - ~/.config/gh:/root/.config/gh:ro
+
+      # Hermes home (for API keys, Google tokens used by the tools)
+      - ~/.hermes:/root/.hermes:ro
     environment:
       - PYTHONPATH=/app/src
     command: >

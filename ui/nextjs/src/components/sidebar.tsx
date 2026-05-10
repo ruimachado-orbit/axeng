@@ -5,7 +5,7 @@ import { usePathname } from 'next/navigation'
 import { useState } from 'react'
 import { cn } from '@/lib/utils'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
+import { Sheet, SheetContent } from '@/components/ui/sheet'
 import {
   LayoutDashboard,
   ScrollText,
@@ -24,7 +24,7 @@ const navItems = [
   { label: 'Settings',   href: '/settings', icon: Settings },
 ]
 
-function NavLink({ item }: { item: typeof navItems[0] }) {
+function NavLink({ item, onNavigate }: { item: typeof navItems[0]; onNavigate?: () => void }) {
   const pathname = usePathname()
   const active = pathname === item.href
   const Icon = item.icon
@@ -32,6 +32,7 @@ function NavLink({ item }: { item: typeof navItems[0] }) {
   return (
     <Link
       href={item.href}
+      onClick={onNavigate}
       className={cn(
         'flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group relative overflow-hidden',
         active
@@ -55,7 +56,7 @@ function NavLink({ item }: { item: typeof navItems[0] }) {
   )
 }
 
-function SidebarContent() {
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex flex-col h-full">
       {/* Logo */}
@@ -74,7 +75,7 @@ function SidebarContent() {
       {/* Nav */}
       <nav className="flex-1 px-3 py-4 space-y-1">
         {navItems.map((item) => (
-          <NavLink key={item.href} item={item} />
+          <NavLink key={item.href} item={item} onNavigate={onNavigate} />
         ))}
       </nav>
 
@@ -109,15 +110,16 @@ export function Sidebar() {
       {/* Mobile: hamburger sheet */}
       <div className="md:hidden fixed top-0 left-0 z-50 p-3">
         <Sheet open={open} onOpenChange={setOpen}>
-          <SheetTrigger
-            render={
-              <button className="flex items-center justify-center w-10 h-10 rounded-xl bg-sidebar border border-white/10 shadow-lg">
-                <Menu className="w-5 h-5 text-white" />
-              </button>
-            }
-          />
+          <button
+            type="button"
+            aria-label="Abrir menu"
+            onClick={() => setOpen(true)}
+            className="flex items-center justify-center w-10 h-10 rounded-xl bg-sidebar border border-white/10 shadow-lg active:scale-95 transition-transform"
+          >
+            <Menu className="w-5 h-5 text-white" />
+          </button>
           <SheetContent side="left" className="w-64 p-0 bg-sidebar border-white/8">
-            <SidebarContent />
+            <SidebarContent onNavigate={() => setOpen(false)} />
           </SheetContent>
         </Sheet>
       </div>

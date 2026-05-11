@@ -282,10 +282,13 @@ def chat():
 
         sys.path.insert(0, str(Path(__file__).parent))
         import orchestrator
+        import logging
 
-        # Test connection
-        console.print("[dim]Connecting to Axeng intelligence...[/dim]")
-        console.print("[green]✓[/green] Connected\n")
+        # Suppress noisy logging
+        logging.getLogger("llm_gateway").setLevel(logging.ERROR)
+        logging.getLogger("orchestrator").setLevel(logging.ERROR)
+
+        console.print("[green]✓[/green] Ready\n")
 
     except Exception as e:
         console.print(f"[red]Error loading Axeng:[/red] {e}")
@@ -293,7 +296,6 @@ def chat():
         raise typer.Exit(1)
 
     console.print("[dim]Type 'exit' or 'quit' to end the chat[/dim]\n")
-    console.print("[dim]I can access your GitHub, Linear, calendar, and team data![/dim]\n")
 
     # Chat loop with orchestrator
     while True:
@@ -307,14 +309,15 @@ def chat():
             # Call orchestrator (it handles tool routing + LLM synthesis)
             console.print(f"\n[bold green]Axeng[/bold green]: ", end="")
 
-            with console.status("[dim]Analyzing and querying your data...[/dim]"):
+            with console.status("[dim]...[/dim]"):
                 try:
                     # Use orchestrator to route query to tools and synthesize response
                     result = orchestrator.orchestrate(
                         goal=user_input,
                         auto_sync=False,  # Don't auto-sync on every query
                         use_llm=True,
-                        provider=config.get("llm_provider", "opencode")
+                        provider=config.get("llm_provider", "opencode"),
+                        quiet=True  # Suppress debug output
                     )
 
                     # orchestrate returns the synthesized text response
@@ -322,8 +325,6 @@ def chat():
 
                 except Exception as e:
                     console.print(f"[red]Error: {e}[/red]\n")
-                    import traceback
-                    console.print(f"[dim]{traceback.format_exc()}[/dim]\n")
 
         except KeyboardInterrupt:
             console.print("\n\n[cyan]Goodbye! 👋[/cyan]\n")

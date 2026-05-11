@@ -34,20 +34,20 @@ Always look for:
 
 ## Response Format
 
-Use this shape unless the user requested another format:
+Use this shape unless the user requested another format (avoid excessive emojis):
 
 ```text
-📌 Bottom line
+Bottom line:
 <one-sentence conclusion>
 
-🔎 Evidence
+Evidence:
 • <specific data point>
 • <specific data point>
 
-⚠️ Risks / gaps
+Risks / gaps:
 • <only if relevant>
 
-✅ Recommended action
+Recommended action:
 • <owner + next step + timing>
 ```
 

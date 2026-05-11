@@ -196,7 +196,7 @@ def github_person_summary(person: str, days: int = 7) -> dict:
     """Full GitHub summary for a person."""
     activity = github_activity(person, days)
     repos = get_user_repos(person)
-    
+
     return {
         "tool": "github_person_summary",
         "person": person,
@@ -204,6 +204,215 @@ def github_person_summary(person: str, days: int = 7) -> dict:
         "repos_worked": repos,
         **activity
     }
+
+
+def github_pr_health(days: int = 14) -> dict:
+    """
+    Analyze PR health across repositories.
+
+    Returns:
+    - Open PRs with review status
+    - Stale PRs (>3 days no activity)
+    - Blocking reviews needed
+    - Review velocity metrics
+    """
+    since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    repos = github_repos()
+
+    open_prs = []
+    stale_prs = []
+    needs_review = []
+    approved_prs = []
+    changes_requested = []
+
+    now = datetime.now()
+    stale_threshold = now - timedelta(days=3)
+
+    for repo in repos:
+        try:
+            # Get open PRs
+            prs = gh_api(f"repos/{repo}/pulls?state=open&per_page=50&sort=updated&direction=desc")
+
+            if isinstance(prs, list):
+                for pr in prs:
+                    pr_data = {
+                        "number": pr.get("number"),
+                        "title": pr.get("title"),
+                        "repo": repo,
+                        "url": pr.get("html_url"),
+                        "author": pr.get("user", {}).get("login", "unknown"),
+                        "created_at": pr.get("created_at"),
+                        "updated_at": pr.get("updated_at"),
+                        "draft": pr.get("draft", False),
+                        "mergeable": pr.get("mergeable"),
+                        "mergeable_state": pr.get("mergeable_state")
+                    }
+
+                    # Calculate age
+                    try:
+                        updated = datetime.fromisoformat(pr.get("updated_at", "").replace("Z", "+00:00"))
+                        created = datetime.fromisoformat(pr.get("created_at", "").replace("Z", "+00:00"))
+                        age_days = (now - updated.replace(tzinfo=None)).days
+                        pr_data["age_days"] = age_days
+                        pr_data["created_days_ago"] = (now - created.replace(tzinfo=None)).days
+                    except:
+                        pr_data["age_days"] = 0
+                        pr_data["created_days_ago"] = 0
+
+                    # Get review status
+                    reviews = gh_api(f"repos/{repo}/pulls/{pr['number']}/reviews")
+                    review_status = "pending"
+                    reviewers_needed = []
+
+                    if isinstance(reviews, list) and reviews:
+                        # Get latest review from each reviewer
+                        latest_reviews = {}
+                        for review in reviews:
+                            reviewer = review.get("user", {}).get("login")
+                            if reviewer:
+                                latest_reviews[reviewer] = review.get("state")
+
+                        # Determine overall status
+                        if "CHANGES_REQUESTED" in latest_reviews.values():
+                            review_status = "changes_requested"
+                        elif "APPROVED" in latest_reviews.values() and "CHANGES_REQUESTED" not in latest_reviews.values():
+                            review_status = "approved"
+
+                        pr_data["review_count"] = len(latest_reviews)
+                        pr_data["reviewers"] = list(latest_reviews.keys())
+                    else:
+                        pr_data["review_count"] = 0
+                        pr_data["reviewers"] = []
+
+                    # Get requested reviewers
+                    requested = pr.get("requested_reviewers", [])
+                    if requested:
+                        reviewers_needed = [r.get("login") for r in requested if r.get("login")]
+                        pr_data["reviewers_needed"] = reviewers_needed
+
+                    pr_data["review_status"] = review_status
+
+                    open_prs.append(pr_data)
+
+                    # Categorize
+                    if not pr_data["draft"]:
+                        if pr_data["age_days"] >= 3:
+                            stale_prs.append(pr_data)
+
+                        if review_status == "pending" and pr_data["review_count"] == 0:
+                            needs_review.append(pr_data)
+                        elif review_status == "approved":
+                            approved_prs.append(pr_data)
+                        elif review_status == "changes_requested":
+                            changes_requested.append(pr_data)
+
+        except Exception as e:
+            # Skip repos that fail
+            pass
+
+    # Calculate metrics
+    total_open = len([pr for pr in open_prs if not pr.get("draft")])
+    avg_age = sum(pr.get("age_days", 0) for pr in open_prs) / len(open_prs) if open_prs else 0
+
+    # Review velocity (PRs reviewed in last 7 days)
+    recent_reviewed = []
+    since_week = (now - timedelta(days=7)).strftime("%Y-%m-%d")
+    for repo in repos[:5]:  # Limit to avoid rate limits
+        try:
+            query = f"repo:{repo} is:pr reviewed:>={since_week}"
+            result = gh_api(f"search/issues?q={query}&per_page=100")
+            if isinstance(result, dict) and "items" in result:
+                recent_reviewed.extend(result["items"])
+        except:
+            pass
+
+    review_velocity = len(recent_reviewed) / 7 if recent_reviewed else 0  # PRs/day
+
+    return {
+        "tool": "github_pr_health",
+        "timestamp": now.isoformat(),
+        "metrics": {
+            "total_open": total_open,
+            "stale_count": len(stale_prs),
+            "needs_review": len(needs_review),
+            "approved": len(approved_prs),
+            "changes_requested": len(changes_requested),
+            "avg_age_days": round(avg_age, 1),
+            "review_velocity_per_day": round(review_velocity, 1)
+        },
+        "open_prs": open_prs,
+        "stale_prs": stale_prs[:10],  # Top 10 oldest
+        "needs_review": needs_review[:10],
+        "approved_prs": approved_prs[:5],
+        "changes_requested": changes_requested[:5],
+        "insights": _generate_pr_insights(open_prs, stale_prs, needs_review, approved_prs, review_velocity)
+    }
+
+
+def _generate_pr_insights(open_prs, stale_prs, needs_review, approved_prs, review_velocity) -> list:
+    """Generate actionable insights from PR health data."""
+    insights = []
+
+    # Stale PR alert
+    if len(stale_prs) > 5:
+        insights.append({
+            "level": "warning",
+            "category": "stale_prs",
+            "message": f"{len(stale_prs)} PRs are stale (>3 days no updates)",
+            "action": "Review oldest PRs first or close if abandoned"
+        })
+    elif len(stale_prs) > 0:
+        insights.append({
+            "level": "info",
+            "category": "stale_prs",
+            "message": f"{len(stale_prs)} PRs waiting >3 days",
+            "action": "Check if reviewers are assigned"
+        })
+
+    # Review bottleneck
+    if len(needs_review) > 10:
+        insights.append({
+            "level": "critical",
+            "category": "review_bottleneck",
+            "message": f"{len(needs_review)} PRs have no reviews yet",
+            "action": "Review capacity issue - consider distributing workload"
+        })
+    elif len(needs_review) > 5:
+        insights.append({
+            "level": "warning",
+            "category": "review_bottleneck",
+            "message": f"{len(needs_review)} PRs waiting for first review",
+            "action": "Assign reviewers to unreviewed PRs"
+        })
+
+    # Approved PRs not merged
+    if len(approved_prs) > 3:
+        insights.append({
+            "level": "warning",
+            "category": "merge_delay",
+            "message": f"{len(approved_prs)} approved PRs not yet merged",
+            "action": "Check CI status and merge approved PRs"
+        })
+
+    # Low review velocity
+    if review_velocity < 1.0 and len(open_prs) > 5:
+        insights.append({
+            "level": "info",
+            "category": "low_velocity",
+            "message": f"Review velocity is {review_velocity:.1f} PRs/day",
+            "action": "Consider increasing review frequency"
+        })
+
+    # All good
+    if not insights:
+        insights.append({
+            "level": "success",
+            "category": "healthy",
+            "message": "PR pipeline is healthy",
+            "action": "Keep up the good work!"
+        })
+
+    return insights
 
 
 # ─────────────────────────────────────────────
@@ -221,7 +430,9 @@ if __name__ == "__main__":
         result = github_commits_summary(days)
     elif cmd == "person":
         result = github_person_summary(person, days)
+    elif cmd == "pr-health":
+        result = github_pr_health(days)
     else:
-        result = {"error": f"Unknown command: {cmd}"}
+        result = {"error": f"Unknown command: {cmd}. Available: activity, commits, person, pr-health"}
 
     print(json.dumps(result, indent=2, default=str))

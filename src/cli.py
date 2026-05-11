@@ -671,6 +671,91 @@ def prs():
         console.print("\n[dim]Tip: Use 'axeng chat' and ask 'show my PRs'[/dim]")
 
 
+@app.command(name="pr-health")
+def pr_health(days: int = typer.Option(14, "--days", "-d", help="Days to analyze")):
+    """Analyze PR health: stale PRs, review bottlenecks, velocity"""
+    console.print(f"[cyan]Analyzing PR health (last {days} days)...[/cyan]\n")
+
+    try:
+        axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+        result = subprocess.run(
+            ["python3", str(Path(__file__).parent / "tools" / "github_activity.py"), "pr-health", "", str(days)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env={**os.environ, "AXENG_HOME": axeng_home}
+        )
+
+        import json
+        data = json.loads(result.stdout) if result.stdout.strip() else {}
+
+        if "error" in data:
+            console.print(f"[red]Error:[/red] {data['error']}")
+            if "hint" in data:
+                console.print(f"[yellow]Hint:[/yellow] {data['hint']}")
+            return
+
+        metrics = data.get("metrics", {})
+        insights = data.get("insights", [])
+        stale_prs = data.get("stale_prs", [])
+        needs_review = data.get("needs_review", [])
+
+        # Show metrics
+        console.print(Panel.fit(
+            f"[bold]Total Open:[/bold] {metrics.get('total_open', 0)}\n"
+            f"[bold]Stale (>3d):[/bold] {metrics.get('stale_count', 0)}\n"
+            f"[bold]Needs Review:[/bold] {metrics.get('needs_review', 0)}\n"
+            f"[bold]Approved:[/bold] {metrics.get('approved', 0)}\n"
+            f"[bold]Changes Requested:[/bold] {metrics.get('changes_requested', 0)}\n"
+            f"[bold]Avg Age:[/bold] {metrics.get('avg_age_days', 0)} days\n"
+            f"[bold]Review Velocity:[/bold] {metrics.get('review_velocity_per_day', 0)} PRs/day",
+            title="📊 PR Health Metrics",
+            border_style="cyan"
+        ))
+
+        # Show insights
+        if insights:
+            console.print("\n[bold]💡 Insights:[/bold]\n")
+            for insight in insights:
+                level = insight.get("level", "info")
+                emoji = {
+                    "critical": "🔴",
+                    "warning": "🟡",
+                    "info": "🔵",
+                    "success": "✅"
+                }.get(level, "ℹ️")
+
+                console.print(f"{emoji} [bold]{insight.get('message')}[/bold]")
+                console.print(f"   → {insight.get('action')}\n")
+
+        # Show stale PRs
+        if stale_prs:
+            console.print("\n[bold]🕐 Stale PRs (>3 days):[/bold]\n")
+            for pr in stale_prs[:5]:
+                age = pr.get("age_days", 0)
+                console.print(f"  • [bold]{pr.get('title')}[/bold] ({age}d old)")
+                console.print(f"    {pr.get('repo')} #{pr.get('number')} - {pr.get('review_status')}")
+                if pr.get("url"):
+                    console.print(f"    [link]{pr['url']}[/link]")
+                console.print()
+
+        # Show PRs needing review
+        if needs_review and len(needs_review) > 0:
+            console.print("\n[bold]👀 PRs Needing First Review:[/bold]\n")
+            for pr in needs_review[:5]:
+                console.print(f"  • [bold]{pr.get('title')}[/bold]")
+                console.print(f"    {pr.get('repo')} #{pr.get('number')} by @{pr.get('author')}")
+                if pr.get("url"):
+                    console.print(f"    [link]{pr['url']}[/link]")
+                console.print()
+
+    except subprocess.TimeoutExpired:
+        console.print("[red]Timeout:[/red] GitHub API is slow. Try again later.")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        console.print("\n[dim]Tip: Check your GitHub token with 'axeng status'[/dim]")
+
+
 @app.command()
 def standup(send: bool = typer.Option(False, "--send", help="Send to Telegram/Slack")):
     """Generate daily standup brief for team"""

@@ -3,6 +3,14 @@
 ## [2.1.1] - 2026-05-11
 
 ### Added
+- **PR Health Analysis**: New `axeng pr-health` command provides comprehensive PR pipeline insights
+  - Shows open PRs with review status (pending, approved, changes requested)
+  - Detects stale PRs (>3 days no activity)
+  - Identifies PRs needing first review
+  - Calculates review velocity (PRs/day)
+  - Provides actionable insights (bottlenecks, merge delays, low velocity)
+  - Visual metrics dashboard with emojis
+  
 - **Progress Indicators**: The orchestrator now shows real-time progress when executing tools
   - Displays tool name and purpose (e.g., "Querying linear_issues... (Get Linear issues by state)")
   - Shows completion status with checkmark or X

@@ -3,6 +3,13 @@
 ## [2.1.1] - 2026-05-11
 
 ### Added
+- **Smart Query Suggestions**: Context-aware query suggestions in `axeng chat`
+  - Time-based suggestions (morning routine, end of day summary, etc.)
+  - Day-specific suggestions (Monday kickoff, Friday review)
+  - Quick selection by number (1-3)
+  - Refresh with 'suggestions' command
+  - Personalized to your workflow patterns
+  
 - **PR Health Analysis**: New `axeng pr-health` command provides comprehensive PR pipeline insights
   - Shows open PRs with review status (pending, approved, changes requested)
   - Detects stale PRs (>3 days no activity)

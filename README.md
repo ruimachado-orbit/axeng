@@ -71,12 +71,18 @@ make dev            # Start the UI
 **Setup & Core:**
 ```bash
 axeng configure     # Interactive setup wizard ⭐
-axeng chat          # Chat with Axeng (AI assistant)
+axeng chat          # Chat with Axeng (smart suggestions!) ⭐
 axeng start         # Start the service
 axeng stop          # Stop the service
 axeng status        # Detailed integration health
 axeng logs          # View logs
 ```
+
+**Chat Features:**
+- 💡 **Smart suggestions** based on time of day and day of week
+- ⚡ **Quick selection** by number (1-3)
+- 🔄 **Refresh** suggestions with 'suggestions' command
+- 📊 Natural language queries about your team and projects
 
 **Daily Operations (⭐ New!):**
 ```bash

@@ -17,11 +17,19 @@ class Axeng < Formula
     # Install Python dependencies
     system libexec/"bin/pip3", "install", "-r", libexec/"requirements.txt"
 
-    # Create wrapper scripts
+    # Create main axeng CLI wrapper
     (bin/"axeng").write <<~EOS
       #!/bin/bash
       export AXENG_HOME="#{libexec}"
-      cd "#{libexec}" && exec "#{libexec}/bin/axeng-start" "$@"
+      export PYTHONPATH="#{libexec}/src:$PYTHONPATH"
+
+      # If no arguments, show help
+      if [ $# -eq 0 ]; then
+        exec python3 "#{libexec}/bin/axeng-cli" --help
+      fi
+
+      # Run CLI with all arguments
+      exec python3 "#{libexec}/bin/axeng-cli" "$@"
     EOS
 
     (bin/"axeng-stop").write <<~EOS

@@ -30,27 +30,27 @@ def list_vacations(month: str = None) -> dict:
         dict with vacation list and summary
     """
     # Query all vacations from the project
-    query = """
-    query($projectId: String!) {
+    query = f"""
+    {{
       issues(
-        filter: { project: { id: { eq: $projectId } } }
+        filter: {{ project: {{ id: {{ eq: "{VACATION_PROJECT_ID}" }} }} }}
         first: 200
-      ) {
-        nodes {
+      ) {{
+        nodes {{
           id
           identifier
           title
           description
           url
-          state { name type }
+          state {{ name type }}
           createdAt
           updatedAt
-        }
-      }
-    }
+        }}
+      }}
+    }}
     """
 
-    result = linear_query(query, {"projectId": VACATION_PROJECT_ID})
+    result = linear_query(query)
 
     if "errors" in result:
         return {
@@ -103,8 +103,8 @@ def extract_dates(text: str) -> dict:
     """Extract start and end dates from vacation description."""
     import re
 
-    # Match format: "2026-05-12 → 2026-05-19"
-    match = re.search(r'(\d{4}-\d{2}-\d{2})\s*[→->]\s*(\d{4}-\d{2}-\d{2})', text)
+    # Match format: "2026-05-12 → 2026-05-19" or "2026-05-12 -> 2026-05-19"
+    match = re.search(r'(\d{4}-\d{2}-\d{2})\s*[→>-]+\s*(\d{4}-\d{2}-\d{2})', text)
     if match:
         return {"start": match.group(1), "end": match.group(2)}
 

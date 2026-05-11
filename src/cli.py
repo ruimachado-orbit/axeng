@@ -420,29 +420,75 @@ def stop():
 
 @app.command()
 def status():
-    """Check Axeng service status"""
+    """Check Axeng service and integrations status"""
     import socket
+    import json
+
     def is_port_in_use(port):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             return s.connect_ex(('localhost', port)) == 0
 
+    console.print("[bold]Axeng Status[/bold]\n")
+
+    # Service status
     ui_running = is_port_in_use(3000)
     api_running = is_port_in_use(3457)
 
+    console.print("[bold cyan]Services:[/bold cyan]")
     if ui_running and api_running:
-        console.print("[green]✓[/green] Axeng is [bold green]running[/bold green]")
-        console.print("[bold]Next.js UI:[/bold] [link]http://localhost:3000[/link]")
-        console.print("[bold]API:[/bold] [link]http://localhost:3457[/link]")
+        console.print("  [green]✓[/green] Running - [link]http://localhost:3000[/link]")
     elif ui_running or api_running:
-        console.print("[yellow]⚠[/yellow] Axeng is [bold yellow]partially running[/bold yellow]")
-        if ui_running:
-            console.print("[green]✓[/green] Next.js UI: [link]http://localhost:3000[/link]")
-        if api_running:
-            console.print("[green]✓[/green] API: [link]http://localhost:3457[/link]")
-        console.print("\n[dim]Try: axeng stop && axeng start[/dim]")
+        console.print("  [yellow]⚠[/yellow] Partially running")
     else:
-        console.print("[yellow]○[/yellow] Axeng is [bold]stopped[/bold]")
-        console.print("Run: [cyan]axeng start[/cyan]")
+        console.print("  [yellow]○[/yellow] Stopped - run [cyan]axeng start[/cyan]")
+
+    # Integration status
+    console.print("\n[bold cyan]Integrations:[/bold cyan]")
+
+    # Check Linear
+    axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+    env = {**os.environ, "AXENG_HOME": axeng_home}
+
+    try:
+        result = subprocess.run(
+            ["python3", str(Path(__file__).parent / "tools" / "linear_tool.py"), "mine"],
+            capture_output=True, text=True, timeout=5, env=env
+        )
+        data = json.loads(result.stdout)
+        if "error" not in data:
+            console.print(f"  [green]✓[/green] Linear - {data.get('total', 0)} issues assigned to you")
+        else:
+            console.print(f"  [red]✗[/red] Linear - {data['error']}")
+    except:
+        console.print("  [yellow]⚠[/yellow] Linear - Not configured")
+
+    # Check GitHub (quick test)
+    if os.getenv("GITHUB_TOKEN") or "GITHUB_TOKEN" in open(Path(axeng_home) / ".env").read() if (Path(axeng_home) / ".env").exists() else "":
+        console.print("  [green]✓[/green] GitHub - Connected")
+    else:
+        console.print("  [yellow]⚠[/yellow] GitHub - Token not configured")
+
+    # Check LLM
+    llm_provider = None
+    config_file = Path(axeng_home) / "config.json"
+    if config_file.exists():
+        with open(config_file) as f:
+            config = json.load(f)
+            llm_provider = config.get("llm_provider")
+            llm_model = config.get(f"{llm_provider}_model")
+            if llm_provider:
+                console.print(f"  [green]✓[/green] LLM - {llm_provider}" + (f"/{llm_model}" if llm_model else ""))
+            else:
+                console.print("  [yellow]⚠[/yellow] LLM - Not configured")
+    else:
+        console.print("  [yellow]⚠[/yellow] LLM - Run [cyan]axeng configure[/cyan]")
+
+    # Check optional services
+    console.print("\n[bold cyan]Optional:[/bold cyan]")
+    console.print("  [dim]Calendar[/dim] - Run [cyan]axeng configure[/cyan] to set up")
+    console.print("  [dim]Obsidian[/dim] - Configure vault path in config")
+
+    console.print()
 
 @app.command()
 def logs():

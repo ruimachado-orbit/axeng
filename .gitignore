@@ -74,6 +74,10 @@ config/config.yaml
 # Secrets (generic)
 secrets/
 *.secret
+
+# Hermes directory (local user data)
+.hermes/
+
 # Python cache
 __pycache__/
 *.py[cod]

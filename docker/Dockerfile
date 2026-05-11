@@ -21,6 +21,14 @@ COPY config/ ./config/
 COPY ui/ ./ui/
 COPY bin/ ./bin/
 
+# ── Set up Hermes directory for Google API ────────────────────
+RUN mkdir -p /root/.hermes/skills/productivity/google-workspace/scripts && \
+    mkdir -p /root/.hermes/secrets
+
+# Copy Google API script to Hermes directory
+COPY src/tools/google_api.py /root/.hermes/skills/productivity/google-workspace/scripts/google_api.py
+RUN chmod +x /root/.hermes/skills/productivity/google-workspace/scripts/google_api.py
+
 # ── Entry point ───────────────────────────────────────────────
 ENV PYTHONPATH=/app/src
 ENV PATH="/app:${PATH}"

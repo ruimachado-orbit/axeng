@@ -1,10 +1,16 @@
 # Axeng — Engineering Manager Accelerator 🤖
 
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](https://opensource.org/licenses/GPL-3.0)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org/)
+[![Python](https://img.shields.io/badge/python-3.12%2B-blue)](https://www.python.org/)
+
 **Stop managing. Start shipping.**
 
 Autonomous AI chief of staff that monitors GitHub, Linear, your calendar, and team — automatically generates standups, 1:1 pre-reads, sprint reports, risk alerts, team sync, and offboarding.
 
 > Runs 24/7 on a $200 Mac Mini. Built by a CTO who was tired of manually chasing status updates.
+>
+> **Open source** under GPL-3.0. Free forever, self-hosted, no cloud dependencies.
 
 ---
 

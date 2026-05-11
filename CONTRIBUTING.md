@@ -21,12 +21,17 @@ Thank you for your interest! Axeng is open source and welcomes contributions.
    git checkout -b feat/your-feature-name
    ```
 
-2. **Run locally** — Axeng has no test suite yet, so run manually:
+2. **Run locally**:
    ```bash
-   pip install -r requirements.txt
+   # Setup
+   make setup-env
    cp .env.example .env
    cp config/config.yaml.example config/config.yaml
-   streamlit run ui/app.py
+   
+   # Edit .env with your API keys
+   
+   # Start the UI
+   make dev
    ```
 
 3. **Make your change** — follow the existing code style.
@@ -55,4 +60,9 @@ Thank you for your interest! Axeng is open source and welcomes contributions.
 
 ## 📜 License
 
-By contributing, you agree that your contributions will be licensed under the MIT License.
+By contributing, you agree that your contributions will be licensed under the **GPL-3.0 License**.
+
+This means:
+- Your code must also be open source
+- Derivatives must use GPL-3.0
+- No proprietary forks allowed

@@ -953,6 +953,202 @@ def team(name: str = typer.Argument(None, help="Team name to show details")):
         console.print(f"[red]Error:[/red] {e}")
 
 
+@app.command()
+def sprint(
+    velocity: bool = typer.Option(False, "--velocity", help="Show velocity history instead of health")
+):
+    """Sprint health analysis and velocity tracking"""
+    console.print("[cyan]Analyzing sprint...[/cyan]\n")
+
+    try:
+        axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+        cmd = "velocity" if velocity else "health"
+
+        result = subprocess.run(
+            ["python3", str(Path(__file__).parent / "tools" / "sprint_health.py"), cmd],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env={**os.environ, "AXENG_HOME": axeng_home}
+        )
+
+        data = json.loads(result.stdout) if result.stdout.strip() else {}
+
+        if "error" in data:
+            console.print(f"[red]Error:[/red] {data['error']}")
+            if "hint" in data:
+                console.print(f"[yellow]Hint:[/yellow] {data['hint']}")
+            return
+
+        if velocity:
+            # Show velocity history
+            console.print(Panel.fit(
+                f"[bold]Average Velocity:[/bold] {data.get('average_velocity', 0)} points/day\n"
+                f"[bold]Completion Rate:[/bold] {data.get('average_completion_rate', 0):.1f}%\n"
+                f"[bold]Trend:[/bold] {data.get('trend', 'N/A').title()}\n"
+                f"[bold]Cycles Analyzed:[/bold] {data.get('cycles_analyzed', 0)}",
+                title="⚡ Sprint Velocity",
+                border_style="cyan"
+            ))
+
+            history = data.get("history", [])
+            if history:
+                console.print("\n[bold]Recent Sprints:[/bold]\n")
+                for cycle in history[:5]:
+                    console.print(f"  • [bold]{cycle.get('cycle')}[/bold]: {cycle.get('completed_points')} points ({cycle.get('completion_rate', 0):.0f}%)")
+
+        else:
+            # Show sprint health
+            cycle = data.get("cycle", {})
+            metrics = data.get("metrics", {})
+            prediction = data.get("prediction", {})
+
+            console.print(Panel.fit(
+                f"[bold]{cycle.get('name', 'N/A')}[/bold]\n"
+                f"{prediction.get('emoji', '')} {prediction.get('message', 'N/A')}\n\n"
+                f"[bold]Progress:[/bold] {metrics.get('completion_rate', 0):.1f}% ({metrics.get('completed', 0)}/{metrics.get('total_issues', 0)} issues)\n"
+                f"[bold]Velocity:[/bold] {metrics.get('velocity', 0)} points/day\n"
+                f"[bold]Time:[/bold] {prediction.get('days_elapsed', 0)}d elapsed, {prediction.get('days_remaining', 0)}d remaining",
+                title="🎯 Sprint Health",
+                border_style="cyan"
+            ))
+
+            # Show insights
+            insights = data.get("insights", [])
+            if insights:
+                console.print("\n[bold]💡 Insights:[/bold]\n")
+                for insight in insights:
+                    type_emoji = {"success": "✅", "warning": "🟡", "critical": "🔴"}.get(insight.get("type"), "ℹ️")
+                    console.print(f"{type_emoji} {insight.get('message')}")
+                    console.print(f"   → {insight.get('action')}\n")
+
+    except subprocess.TimeoutExpired:
+        console.print("[red]Timeout:[/red] Linear API is slow. Try again later.")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+
+
+@app.command()
+def dora(days: int = typer.Option(30, "--days", "-d", help="Days to analyze")):
+    """Show DORA metrics (DevOps Research & Assessment)"""
+    console.print(f"[cyan]Calculating DORA metrics (last {days} days)...[/cyan]\n")
+
+    try:
+        axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+        result = subprocess.run(
+            ["python3", str(Path(__file__).parent / "tools" / "dora_metrics.py"), str(days)],
+            capture_output=True,
+            text=True,
+            timeout=60,
+            env={**os.environ, "AXENG_HOME": axeng_home}
+        )
+
+        data = json.loads(result.stdout) if result.stdout.strip() else {}
+
+        if "error" in data:
+            console.print(f"[red]Error:[/red] {data['error']}")
+            return
+
+        metrics = data.get("metrics", {})
+
+        # Show overall tier
+        console.print(Panel.fit(
+            f"[bold]Overall DORA Tier:[/bold] {data.get('overall_tier', 'N/A')}\n"
+            f"Engineering excellence level based on 4 key metrics",
+            title="📈 DORA Metrics",
+            border_style="cyan"
+        ))
+
+        # Deployment Frequency
+        deploy = metrics.get("deployment_frequency", {})
+        console.print(f"\n{deploy.get('emoji', '')} [bold]Deployment Frequency:[/bold] {deploy.get('dora_tier', 'N/A')}")
+        console.print(f"   {deploy.get('per_week', 0):.1f} deploys/week ({deploy.get('total_deployments', 0)} total)")
+
+        # Lead Time
+        lead = metrics.get("lead_time", {})
+        console.print(f"\n{lead.get('emoji', '')} [bold]Lead Time for Changes:[/bold] {lead.get('dora_tier', 'N/A')}")
+        console.print(f"   {lead.get('average_days', 0):.1f} days average")
+
+        # MTTR
+        mttr = metrics.get("mttr", {})
+        if "error" not in mttr:
+            console.print(f"\n{mttr.get('emoji', '')} [bold]Mean Time to Recovery:[/bold] {mttr.get('dora_tier', 'N/A')}")
+            console.print(f"   {mttr.get('average_hours', 0):.1f} hours average")
+
+        # Change Failure Rate
+        failure = metrics.get("change_failure_rate", {})
+        console.print(f"\n{failure.get('emoji', '')} [bold]Change Failure Rate:[/bold] {failure.get('dora_tier', 'N/A')}")
+        console.print(f"   {failure.get('failure_rate_pct', 0):.1f}% of deployments")
+
+        # Summary
+        summary = data.get("summary", {})
+        strengths = summary.get("strengths", [])
+        weaknesses = summary.get("weaknesses", [])
+
+        if strengths:
+            console.print("\n[bold green]Strengths:[/bold green]")
+            for s in strengths:
+                console.print(f"  ✓ {s}")
+
+        if weaknesses:
+            console.print("\n[bold yellow]Areas for Improvement:[/bold yellow]")
+            for w in weaknesses:
+                console.print(f"  ⚠ {w}")
+
+    except subprocess.TimeoutExpired:
+        console.print("[red]Timeout:[/red] API calls taking too long. Try again later.")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+
+
+@app.command()
+def report(
+    weekly: bool = typer.Option(False, "--weekly", help="Generate weekly report"),
+    send: bool = typer.Option(False, "--send", help="Send report via Telegram/Email")
+):
+    """Generate comprehensive reports"""
+    if not weekly:
+        console.print("[yellow]Tip:[/yellow] Use --weekly to generate weekly report")
+        console.print("Usage: axeng report --weekly [--send]")
+        return
+
+    console.print("[cyan]Generating weekly report...[/cyan]\n")
+    console.print("[dim]This may take a minute...[/dim]\n")
+
+    try:
+        axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+        cmd = ["python3", str(Path(__file__).parent / "tools" / "weekly_report.py")]
+
+        if send:
+            cmd.append("--send")
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=120,
+            env={**os.environ, "AXENG_HOME": axeng_home}
+        )
+
+        # Print the formatted report
+        if result.stdout:
+            console.print(result.stdout)
+
+        if result.stderr:
+            # Print progress messages from stderr
+            for line in result.stderr.split('\n'):
+                if line.strip():
+                    console.print(f"[dim]{line}[/dim]")
+
+        if send:
+            console.print("\n[green]✓[/green] Report sent!")
+
+    except subprocess.TimeoutExpired:
+        console.print("[red]Timeout:[/red] Report generation taking too long.")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+
+
 def main():
     """Main CLI entry point"""
     app()

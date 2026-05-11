@@ -84,13 +84,22 @@ axeng logs          # View logs
 - 🔄 **Refresh** suggestions with 'suggestions' command
 - 📊 Natural language queries about your team and projects
 
-**Daily Operations (⭐ New!):**
+**Daily Operations:**
 ```bash
 axeng standup       # Generate daily standup brief
 axeng ooo           # Who's out of office today
 axeng issues        # Show my Linear issues
 axeng prs           # Show my GitHub pull requests
-axeng pr-health     # Analyze PR health & bottlenecks ⭐
+axeng pr-health     # Analyze PR health & bottlenecks
+```
+
+**Metrics & Analytics (⭐ New in v2.2.0!):**
+```bash
+axeng sprint              # Sprint health and progress
+axeng sprint --velocity   # Historical velocity tracking
+axeng dora                # DORA metrics dashboard
+axeng report --weekly     # Generate weekly summary
+axeng report --weekly --send  # Send via Telegram
 ```
 
 **Team Management (⭐ New!):**

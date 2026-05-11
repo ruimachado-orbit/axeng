@@ -266,7 +266,7 @@ def chat():
         console.print("Run: [cyan]axeng configure[/cyan]\n")
         raise typer.Exit(1)
 
-    # Load LLM gateway and .env
+    # Load environment and orchestrator
     try:
         # Load environment variables from AXENG_HOME
         axeng_home = Path(os.getenv("AXENG_HOME", Path.home() / ".axeng"))
@@ -281,44 +281,21 @@ def chat():
                     os.environ[key.strip()] = value.strip()
 
         sys.path.insert(0, str(Path(__file__).parent))
-        import llm_gateway
+        import orchestrator
 
         # Test connection
-        console.print("[dim]Connecting to LLM...[/dim]")
-        test_response = llm_gateway.call(
-            provider=config.get("llm_provider", "opencode"),
-            prompt="Say 'ready'",
-            max_tokens=10
-        )
-        if not test_response or "error" in str(test_response).lower():
-            console.print("[red]Error:[/red] Could not connect to LLM")
-            console.print("Check your API keys in config\n")
-            raise typer.Exit(1)
-        console.print("[green]✓[/green] Connected to LLM\n")
+        console.print("[dim]Connecting to Axeng intelligence...[/dim]")
+        console.print("[green]✓[/green] Connected\n")
 
     except Exception as e:
-        console.print(f"[red]Error loading LLM:[/red] {e}")
-        console.print("Run: [cyan]axeng configure[/cyan] to set up your LLM provider\n")
+        console.print(f"[red]Error loading Axeng:[/red] {e}")
+        console.print("Run: [cyan]axeng configure[/cyan] to set up your provider\n")
         raise typer.Exit(1)
 
     console.print("[dim]Type 'exit' or 'quit' to end the chat[/dim]\n")
+    console.print("[dim]I can access your GitHub, Linear, calendar, and team data![/dim]\n")
 
-    # System prompt for Axeng
-    system_prompt = """You are Axeng, an AI engineering manager assistant. You help engineering managers with:
-- Team status and activity
-- GitHub PRs and issues
-- Linear project tracking
-- Sprint health reports
-- Risk analysis
-- 1:1 meeting prep
-- Engineering metrics and insights
-
-Be helpful, concise, and actionable. If you need data from GitHub or Linear that you don't have access to,
-suggest running specific axeng commands or checking the web UI at http://localhost:3000."""
-
-    conversation_history = []
-
-    # Chat loop with actual LLM
+    # Chat loop with orchestrator
     while True:
         try:
             user_input = Prompt.ask("[bold cyan]You[/bold cyan]")
@@ -327,34 +304,27 @@ suggest running specific axeng commands or checking the web UI at http://localho
                 console.print("\n[cyan]Goodbye! 👋[/cyan]\n")
                 break
 
-            # Add to conversation history
-            conversation_history.append({"role": "user", "content": user_input})
-
-            # Build full prompt with history
-            messages = [{"role": "system", "content": system_prompt}]
-            messages.extend(conversation_history[-10:])  # Keep last 10 messages
-
-            # Call LLM
+            # Call orchestrator (it handles tool routing + LLM synthesis)
             console.print(f"\n[bold green]Axeng[/bold green]: ", end="")
 
-            with console.status("[dim]Thinking...[/dim]"):
-                # Build full prompt with system context
-                full_prompt = f"{system_prompt}\n\nUser: {user_input}\n\nAssistant:"
+            with console.status("[dim]Analyzing and querying your data...[/dim]"):
+                try:
+                    # Use orchestrator to route query to tools and synthesize response
+                    result = orchestrator.orchestrate(
+                        goal=user_input,
+                        auto_sync=False,  # Don't auto-sync on every query
+                        use_llm=True,
+                        provider=config.get("llm_provider", "opencode"),
+                        max_tokens=1000
+                    )
 
-                response = llm_gateway.call(
-                    provider=config.get("llm_provider", "opencode"),
-                    prompt=full_prompt,
-                    max_tokens=500,
-                    temperature=0.7
-                )
+                    # orchestrate returns the synthesized text response
+                    console.print(result + "\n")
 
-            if response and response.get("ok"):
-                text = response.get("text", "")
-                console.print(text + "\n")
-                conversation_history.append({"role": "assistant", "content": text})
-            else:
-                error = response.get("error", "Unknown error") if response else "No response"
-                console.print(f"[red]Error: {error}[/red]\n")
+                except Exception as e:
+                    console.print(f"[red]Error: {e}[/red]\n")
+                    import traceback
+                    console.print(f"[dim]{traceback.format_exc()}[/dim]\n")
 
         except KeyboardInterrupt:
             console.print("\n\n[cyan]Goodbye! 👋[/cyan]\n")

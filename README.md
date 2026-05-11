@@ -68,15 +68,33 @@ make dev            # Start the UI
 
 ### CLI Commands (After Brew Install)
 
+**Setup & Core:**
 ```bash
 axeng configure     # Interactive setup wizard ⭐
-axeng chat          # Chat with Axeng
+axeng chat          # Chat with Axeng (AI assistant)
 axeng start         # Start the service
 axeng stop          # Stop the service
-axeng status        # Check if running
+axeng status        # Detailed integration health
 axeng logs          # View logs
-axeng --help        # Show all commands
 ```
+
+**Daily Operations (⭐ New!):**
+```bash
+axeng standup       # Generate daily standup brief
+axeng ooo           # Who's out of office today
+axeng issues        # Show my Linear issues
+axeng prs           # Show my GitHub pull requests
+```
+
+**Team Management (⭐ New!):**
+```bash
+axeng prep [name]   # Prepare for 1:1 meeting
+axeng team          # List teams or show details
+axeng offboard [user] --dry-run  # Preview offboarding
+axeng offboard [user] --execute  # Actually offboard
+```
+
+**Time Savings: 30-45 minutes per day!**
 
 ### Makefile Commands (Git Clone)
 
@@ -312,6 +330,171 @@ Axeng ships with workflow skills so it knows not just which tool to call, but ho
 - `offboarding` — GitHub + Linear access removal with dry-run safety.
 
 The LLM synthesis layer uses `prompts/engineering-manager-code-act.md`: a direct Engineering Manager system prompt with code-act behavior, evidence-first answers, ownership, delivery risk, and concrete next actions.
+
+---
+
+## 📋 Command Reference
+
+### Quick Info Commands
+
+#### `axeng ooo` - Who's Out of Office
+Check who's on vacation today from Linear vacation project.
+
+```bash
+axeng ooo
+# Output:
+# 2 person(s) OOO today:
+#   • John Doe: 2026-05-11 to 2026-05-15
+#   • Jane Smith: 2026-05-10 to 2026-05-12
+```
+
+#### `axeng issues` - My Linear Issues
+Show all issues assigned to you, grouped by state.
+
+```bash
+axeng issues
+# Output:
+# 24 issue(s) assigned to you:
+# Backlog:
+#   • MAI-123 — Implement OAuth2
+#   • MAI-456 — Add dashboard
+# In Progress:
+#   • MAI-234 — Refactor API
+```
+
+#### `axeng prs` - My GitHub Pull Requests
+List your open GitHub PRs.
+
+```bash
+axeng prs
+# Output:
+# 3 open PR(s):
+#   • Fix authentication bug
+#     https://github.com/org/repo/pull/123
+```
+
+#### `axeng status` - Integration Health Check
+Detailed status of all integrations (Linear, GitHub, LLM, Calendar).
+
+```bash
+axeng status
+# Output:
+# Services: ✓ Running
+# Integrations:
+#   ✓ Linear - 24 issues assigned
+#   ✓ GitHub - Connected
+#   ✓ LLM - opencode/minimax-m2.5-free
+#   ⚠ Calendar - Not configured
+```
+
+### Engineering Manager Workflows
+
+#### `axeng standup` - Daily Standup Brief
+Generate comprehensive daily standup with:
+- What shipped yesterday
+- Who's blocked
+- PRs waiting for review (>48h)
+- Who's OOO today
+
+```bash
+axeng standup
+
+# With Telegram notification (coming soon):
+axeng standup --send
+```
+
+**Use case:** Run every morning at 7:30am for team standup  
+**Time saved:** 10 minutes/day
+
+#### `axeng prep [name]` - 1:1 Meeting Preparation
+Prepare for 1:1 meetings with team members. Shows:
+- Open issues assigned to them
+- Recent commits and PRs
+- Last 1:1 notes (from Obsidian)
+- Suggested discussion topics
+
+```bash
+axeng prep "John Doe"
+axeng prep johndoe
+
+# Output:
+# Bottom line:
+# John has 5 open issues, 2 pending PRs, shipped 8 commits this week
+#
+# Evidence:
+# • Open issues: MAI-123 (In Progress), MAI-456 (Todo)
+# • Recent commits: "Add OAuth2 flow" (2 days ago)
+# • Pending PRs: PR-234 waiting review (2 days)
+#
+# Suggested topics:
+# • Discuss PR-234 blockers
+# • Review progress on MAI-123
+# • Career development check-in
+```
+
+**Use case:** Run 5 minutes before every 1:1  
+**Time saved:** 5 minutes/meeting
+
+#### `axeng team [name]` - Team Management
+List all teams or show specific team details.
+
+```bash
+# List all teams
+axeng team
+
+# Show specific team
+axeng team Frontend
+# Output:
+# Frontend
+# Owner: John Doe
+# Repos: org/web-app, org/mobile-app
+```
+
+#### `axeng offboard [username]` - Safe Offboarding
+Remove team member from GitHub orgs and Linear workspace.
+
+**Safe by default** - uses dry-run mode to preview changes:
+
+```bash
+# Preview what will be removed (SAFE)
+axeng offboard user123
+# Output:
+# DRY RUN MODE - showing what would be removed
+# GitHub: Remove from 2 orgs
+# Linear: Remove from workspace, unassign 5 issues
+
+# Actually perform offboarding
+axeng offboard user123 --execute
+```
+
+**Use case:** Team member departure  
+**Time saved:** 15 minutes/person
+
+### Morning Routine Example
+
+Save 20 minutes every morning:
+
+```bash
+# Create an alias
+alias morning="axeng ooo && axeng standup && axeng issues"
+
+# Run it
+morning
+```
+
+**Before Axeng:**
+1. Open Linear → check issues (3 min)
+2. Open GitHub → check PRs (3 min)
+3. Open calendar → check OOO (2 min)
+4. Copy/paste into Slack (5 min)
+5. Context switch between tools (7 min)
+
+**Total: 20 minutes**
+
+**With Axeng:**
+```bash
+morning    # 30 seconds
+```
 
 ---
 

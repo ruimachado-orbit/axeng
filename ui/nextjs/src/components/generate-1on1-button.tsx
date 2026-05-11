@@ -9,8 +9,10 @@ interface Generate1on1ButtonProps {
 
 interface ParsedPreread {
   title: string
-  metrics: { label: string; value: string; icon: string }[]
-  sections: { title: string; content: string[]; icon: string; type: 'success' | 'warning' | 'info' }[]
+  bottomLine: string
+  evidence: { label: string; value: string; highlight?: boolean }[]
+  risks: string[]
+  recommendations: string[]
   talkingPoints: string[]
   footer: string
 }
@@ -19,53 +21,72 @@ function parsePrereadOutput(output: string): ParsedPreread {
   const lines = output.split('\n')
   const parsed: ParsedPreread = {
     title: '',
-    metrics: [],
-    sections: [],
+    bottomLine: '',
+    evidence: [],
+    risks: [],
+    recommendations: [],
     talkingPoints: [],
     footer: ''
   }
 
-  let currentSection: { title: string; content: string[]; icon: string; type: 'success' | 'warning' | 'info' } | null = null
+  let currentSection = ''
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
     const trimmed = line.trim()
 
-    if (trimmed.startsWith('*1:1 Pre-read')) {
-      parsed.title = trimmed.replace(/\*/g, '').replace('1:1 Pre-read —', '').trim()
-    } else if (trimmed.startsWith('Open Linear issues:') || trimmed.startsWith('Open PRs:') || trimmed.includes('PRs abertos') || trimmed.includes('Projetos')) {
-      const match = trimmed.match(/(.+?):\s*\*?(\d+|\?)\*?/)
-      if (match) {
-        parsed.metrics.push({
-          label: match[1].replace(/\*/g, '').trim(),
-          value: match[2],
-          icon: match[1].includes('Linear') ? 'list' : match[1].includes('PR') ? 'git' : 'folder'
-        })
-      }
-    } else if (trimmed.startsWith('*Linear*') || trimmed.startsWith('*GitHub*')) {
-      if (currentSection) parsed.sections.push(currentSection)
+    // Title
+    if (trimmed.includes('1:1 Pre-read')) {
+      const match = trimmed.match(/1:1 Pre-read\s*[—–-]\s*(.+)/)
+      if (match) parsed.title = match[1].replace(/\*/g, '').trim()
+    }
 
-      const platform = trimmed.includes('Linear') ? 'Linear' : 'GitHub'
-      const hasNoIssues = trimmed.includes('no open issues') || trimmed.includes('no commits')
-
-      currentSection = {
-        title: platform,
-        content: [trimmed.replace(/\*/g, '')],
-        icon: platform === 'Linear' ? 'list' : 'git',
-        type: hasNoIssues ? 'success' : 'info'
-      }
-    } else if (trimmed.startsWith('*Talking points*')) {
-      if (currentSection) parsed.sections.push(currentSection)
-      currentSection = null
-    } else if (trimmed.startsWith('•')) {
-      parsed.talkingPoints.push(trimmed.substring(1).trim())
+    // Sections
+    if (trimmed === 'Bottom line:') {
+      currentSection = 'bottomLine'
+    } else if (trimmed === 'Evidence:') {
+      currentSection = 'evidence'
+    } else if (trimmed.match(/^Risks?\s*\/\s*gaps?:/i)) {
+      currentSection = 'risks'
+    } else if (trimmed.match(/^Recommended actions?:/i)) {
+      currentSection = 'recommendations'
+    } else if (trimmed.match(/^\*?Talking points?\*?:?/i)) {
+      currentSection = 'talkingPoints'
     } else if (trimmed.startsWith('_') && trimmed.endsWith('_')) {
       parsed.footer = trimmed.replace(/_/g, '')
-    } else if (currentSection && trimmed) {
-      currentSection.content.push(trimmed)
+    }
+
+    // Parse content based on section
+    if (currentSection === 'bottomLine' && trimmed && !trimmed.includes('Bottom line:')) {
+      parsed.bottomLine += (parsed.bottomLine ? ' ' : '') + trimmed
+    } else if (currentSection === 'evidence' && trimmed.startsWith('•')) {
+      const content = trimmed.substring(1).trim()
+
+      // Parse structured evidence lines like "Linear open issues: 0"
+      const match = content.match(/^(.+?):\s*(.+)$/)
+      if (match) {
+        const label = match[1].trim()
+        const value = match[2].trim()
+        const isHighlight = value.includes('/Users/') || value.includes('MAI')
+
+        parsed.evidence.push({
+          label,
+          value,
+          highlight: isHighlight
+        })
+      } else {
+        parsed.evidence.push({ label: '', value: content })
+      }
+    } else if (currentSection === 'risks' && trimmed.startsWith('•')) {
+      parsed.risks.push(trimmed.substring(1).trim())
+    } else if (currentSection === 'risks' && trimmed.startsWith('-')) {
+      parsed.risks.push(trimmed.substring(1).trim())
+    } else if (currentSection === 'recommendations' && trimmed.startsWith('•')) {
+      parsed.recommendations.push(trimmed.substring(1).trim())
+    } else if (currentSection === 'talkingPoints' && trimmed.startsWith('•')) {
+      parsed.talkingPoints.push(trimmed.substring(1).trim())
     }
   }
-
-  if (currentSection) parsed.sections.push(currentSection)
 
   return parsed
 }
@@ -179,74 +200,114 @@ export function Generate1on1Button({ person }: Generate1on1ButtonProps) {
                 </div>
               </div>
 
-              {/* Metrics cards */}
-              {parsed.metrics.length > 0 && (
-                <div className="grid grid-cols-3 gap-3 mt-6">
-                  {parsed.metrics.map((metric, i) => (
-                    <div key={i} className="glass-hover border border-border/40 rounded-xl p-4 text-center">
-                      <div className="text-3xl font-bold text-foreground mb-1">{metric.value}</div>
-                      <div className="text-xs text-muted-foreground">{metric.label}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
             </div>
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto p-8 space-y-6">
-              {/* Status sections */}
-              {parsed.sections.map((section, i) => (
-                <div key={i} className={`glass-hover border rounded-2xl p-5 ${
-                  section.type === 'success' ? 'border-emerald-500/30 bg-emerald-500/5' :
-                  section.type === 'warning' ? 'border-amber-500/30 bg-amber-500/5' :
-                  'border-indigo-500/30 bg-indigo-500/5'
-                }`}>
+              {/* Bottom line - Hero section */}
+              {parsed.bottomLine && (
+                <div className="glass border border-emerald-500/30 rounded-2xl p-6 bg-gradient-to-br from-emerald-500/5 to-teal-600/5">
                   <div className="flex items-start gap-3">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      section.type === 'success' ? 'bg-emerald-500/10' :
-                      section.type === 'warning' ? 'bg-amber-500/10' :
-                      'bg-indigo-500/10'
-                    }`}>
-                      {section.icon === 'git' ? (
-                        <GitBranch className={`w-5 h-5 ${
-                          section.type === 'success' ? 'text-emerald-600' :
-                          section.type === 'warning' ? 'text-amber-600' :
-                          'text-indigo-600'
-                        }`} />
-                      ) : section.type === 'success' ? (
-                        <CheckCircle2 className="w-5 h-5 text-emerald-600" />
-                      ) : (
-                        <AlertCircle className="w-5 h-5 text-indigo-600" />
-                      )}
+                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
+                      <TrendingUp className="w-5 h-5 text-emerald-600" />
                     </div>
                     <div className="flex-1">
-                      <h3 className="font-semibold text-base mb-2">{section.title}</h3>
-                      {section.content.map((line, j) => (
-                        <p key={j} className="text-sm text-muted-foreground leading-relaxed">
-                          {line}
-                        </p>
-                      ))}
+                      <h3 className="font-bold text-base mb-2 text-emerald-700 dark:text-emerald-400">Bottom Line</h3>
+                      <p className="text-sm text-foreground leading-relaxed">{parsed.bottomLine}</p>
                     </div>
                   </div>
                 </div>
-              ))}
+              )}
+
+              {/* Evidence */}
+              {parsed.evidence.length > 0 && (
+                <div className="glass border border-indigo-500/30 rounded-2xl p-6 bg-indigo-500/5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+                      <CheckCircle2 className="w-5 h-5 text-indigo-600" />
+                    </div>
+                    <h3 className="font-bold text-lg">Evidence</h3>
+                  </div>
+                  <div className="space-y-2">
+                    {parsed.evidence.map((item, i) => (
+                      <div key={i} className={`flex items-start gap-3 text-sm ${item.highlight ? 'bg-indigo-500/10 -mx-2 px-2 py-1.5 rounded-lg' : ''}`}>
+                        <span className="text-indigo-600 font-medium">•</span>
+                        {item.label ? (
+                          <div className="flex-1">
+                            <span className="font-medium text-foreground">{item.label}:</span>{' '}
+                            <span className={item.highlight ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-muted-foreground'}>
+                              {item.value}
+                            </span>
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground flex-1">{item.value}</span>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Risks / Gaps */}
+              {parsed.risks.length > 0 && (
+                <div className="glass border border-amber-500/30 rounded-2xl p-6 bg-amber-500/5">
+                  <div className="flex items-start gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
+                      <AlertCircle className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <h3 className="font-bold text-lg">Risks / Gaps</h3>
+                  </div>
+                  <div className="space-y-3">
+                    {parsed.risks.map((risk, i) => (
+                      <div key={i} className="flex items-start gap-3">
+                        <span className="text-amber-600 font-medium text-sm">⚠</span>
+                        <p className="text-sm text-foreground leading-relaxed flex-1">{risk}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Recommended Actions */}
+              {parsed.recommendations.length > 0 && (
+                <div className="glass border border-blue-500/30 rounded-2xl p-6 bg-blue-500/5">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
+                      <Lightbulb className="w-5 h-5 text-blue-600" />
+                    </div>
+                    <h3 className="font-bold text-lg">Recommended Actions</h3>
+                  </div>
+                  <div className="space-y-3">
+                    {parsed.recommendations.map((rec, i) => (
+                      <div key={i} className="flex items-start gap-3 group">
+                        <div className="w-6 h-6 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <span className="text-xs font-bold text-blue-600">{i + 1}</span>
+                        </div>
+                        <p className="text-sm text-foreground leading-relaxed group-hover:text-blue-600 transition-colors flex-1">
+                          {rec}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Talking points */}
               {parsed.talkingPoints.length > 0 && (
-                <div className="glass border border-indigo-500/30 rounded-2xl p-6 bg-gradient-to-br from-indigo-500/5 to-purple-600/5">
+                <div className="glass border border-purple-500/30 rounded-2xl p-6 bg-gradient-to-br from-purple-500/5 to-pink-600/5">
                   <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
-                      <Lightbulb className="w-5 h-5 text-indigo-600" />
+                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
+                      <MessageSquare className="w-5 h-5 text-purple-600" />
                     </div>
                     <h3 className="font-bold text-lg">Talking Points</h3>
                   </div>
                   <div className="space-y-3">
                     {parsed.talkingPoints.map((point, i) => (
                       <div key={i} className="flex items-start gap-3 group">
-                        <div className="w-6 h-6 rounded-lg bg-indigo-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <span className="text-xs font-bold text-indigo-600">{i + 1}</span>
+                        <div className="w-6 h-6 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+                          <span className="text-xs font-bold text-purple-600">{i + 1}</span>
                         </div>
-                        <p className="text-sm text-foreground leading-relaxed group-hover:text-indigo-600 transition-colors">
+                        <p className="text-sm text-foreground leading-relaxed group-hover:text-purple-600 transition-colors flex-1">
                           {point}
                         </p>
                       </div>

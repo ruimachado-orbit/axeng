@@ -183,3 +183,22 @@ free-ports: ## Free required ports (8501) before starting
 	else \
 		echo "✅ Port 8501 is available"; \
 	fi
+
+# ── Next.js UI targets ────────────────────────────────────────────────
+ui-setup: ## Set up Next.js UI (install dependencies)
+	@echo "📦 Setting up Next.js UI..."
+	@cd ui/nextjs && ./setup.sh
+
+ui-dev: ## Start Next.js UI in development mode
+	@echo "🚀 Starting Next.js UI (dev mode)..."
+	@cd ui/nextjs && ./dev.sh
+
+ui-start: ## Start Next.js UI (production-like)
+	@echo "🚀 Starting Next.js UI..."
+	@cd ui/nextjs && ./start.sh
+
+ui-stop: ## Stop Next.js UI processes
+	@echo "🛑 Stopping Next.js UI..."
+	@pkill -f "next dev" || true
+	@pkill -f "api_server.py" || true
+	@echo "✅ UI stopped"

@@ -322,8 +322,21 @@ Try asking: "What PRs are waiting for review?" or "Show me sprint health"
 
 @app.command()
 def start():
-    """Start Axeng Next.js UI"""
-    console.print("[cyan]Starting Axeng Next.js UI...[/cyan]")
+    """Start Axeng service"""
+    console.print("[cyan]Starting Axeng...[/cyan]")
+
+    # Check if already running
+    import socket
+    def is_port_in_use(port):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(('localhost', port)) == 0
+
+    if is_port_in_use(3000) and is_port_in_use(3457):
+        console.print("[yellow]⚠[/yellow] Axeng appears to be already running")
+        console.print("[bold]Next.js UI:[/bold] [link]http://localhost:3000[/link]")
+        console.print("[bold]API:[/bold] [link]http://localhost:3457[/link]")
+        console.print("\n[dim]Run 'axeng status' to check or 'axeng stop' to stop it[/dim]")
+        return
 
     # Check configuration
     if not CONFIG_FILE.exists():
@@ -349,23 +362,29 @@ def start():
             console.print(result.stderr)
             raise typer.Exit(1)
 
-    # Start using make
-    result = subprocess.run(
+    # Start using make (don't capture output, let it run in background)
+    console.print("[cyan]Starting Axeng Next.js UI...[/cyan]")
+    subprocess.Popen(
         ["make", "start"],
         cwd=axeng_dir,
-        capture_output=True,
-        text=True
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL
     )
 
-    if result.returncode == 0:
+    # Wait a moment for services to start
+    import time
+    time.sleep(3)
+
+    # Check if services started
+    if is_port_in_use(3000) or is_port_in_use(3457):
         console.print("[green]✓[/green] Axeng started")
         console.print("\n[bold]Next.js UI:[/bold] [link]http://localhost:3000[/link]")
         console.print("[bold]API:[/bold] [link]http://localhost:3457[/link]")
         console.print("\n[dim]Logs: tail -f /tmp/axeng-*.log[/dim]")
     else:
-        console.print("[red]Error starting Axeng[/red]")
-        console.print(result.stderr)
-        raise typer.Exit(1)
+        console.print("[yellow]⚠[/yellow] Services may take a moment to start")
+        console.print("[dim]Check status: axeng status[/dim]")
+        console.print("[dim]View logs: axeng logs[/dim]")
 
 @app.command()
 def stop():
@@ -389,12 +408,26 @@ def stop():
 @app.command()
 def status():
     """Check Axeng service status"""
-    try:
-        import requests
-        response = requests.get("http://localhost:8501", timeout=2)
+    import socket
+    def is_port_in_use(port):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            return s.connect_ex(('localhost', port)) == 0
+
+    ui_running = is_port_in_use(3000)
+    api_running = is_port_in_use(3457)
+
+    if ui_running and api_running:
         console.print("[green]✓[/green] Axeng is [bold green]running[/bold green]")
-        console.print(f"Web UI: [link]http://localhost:8501[/link]")
-    except:
+        console.print("[bold]Next.js UI:[/bold] [link]http://localhost:3000[/link]")
+        console.print("[bold]API:[/bold] [link]http://localhost:3457[/link]")
+    elif ui_running or api_running:
+        console.print("[yellow]⚠[/yellow] Axeng is [bold yellow]partially running[/bold yellow]")
+        if ui_running:
+            console.print("[green]✓[/green] Next.js UI: [link]http://localhost:3000[/link]")
+        if api_running:
+            console.print("[green]✓[/green] API: [link]http://localhost:3457[/link]")
+        console.print("\n[dim]Try: axeng stop && axeng start[/dim]")
+    else:
         console.print("[yellow]○[/yellow] Axeng is [bold]stopped[/bold]")
         console.print("Run: [cyan]axeng start[/cyan]")
 

@@ -1,4 +1,4 @@
-.PHONY: help install dev build start stop logs clean update test setup-google check
+.PHONY: help install dev build start stop logs clean update test setup-google check free-ports check-docker
 
 # ══════════════════════════════════════════════════════════════════
 # Axeng — Makefile
@@ -79,12 +79,16 @@ test-google: ## Test Google Workspace authentication (generates token)
 
 dev: ## Start development environment (Docker)
 	@echo "🚀 Starting Axeng in dev mode..."
+	@make check-docker
 	@make setup-env
+	@make free-ports
 	docker compose -f docker/docker-compose.yml up
 
 start: ## Start Axeng (background)
 	@echo "🚀 Starting Axeng..."
+	@make check-docker
 	@make setup-env
+	@make free-ports
 	docker compose -f docker/docker-compose.yml up -d
 	@echo ""
 	@echo "✅ Axeng is running at http://localhost:8501"
@@ -101,6 +105,7 @@ logs: ## View logs (follow)
 
 build: ## Rebuild Docker image
 	@echo "🔨 Building Docker image..."
+	@make check-docker
 	docker compose -f docker/docker-compose.yml build
 
 rebuild: ## Rebuild and restart
@@ -140,3 +145,37 @@ restart: stop start ## Restart Axeng
 
 check: ## Verify setup and dependencies
 	@./bin/check-setup
+
+check-docker: ## Check if Docker is running
+	@if ! docker ps >/dev/null 2>&1; then \
+		echo "❌ Docker is not running"; \
+		echo ""; \
+		echo "Please start Docker Desktop:"; \
+		echo "  • macOS: Open Docker.app or run: open -a Docker"; \
+		echo "  • Linux: sudo systemctl start docker"; \
+		echo ""; \
+		echo "Then try again."; \
+		exit 1; \
+	fi
+
+free-ports: ## Free required ports (8501) before starting
+	@echo "🔍 Checking for processes on port 8501..."
+	@PIDS=$$(lsof -ti:8501 2>/dev/null); \
+	if [ -n "$$PIDS" ]; then \
+		echo "⚠️  Port 8501 is in use by process(es): $$PIDS"; \
+		for PID in $$PIDS; do \
+			PNAME=$$(ps -p $$PID -o comm= 2>/dev/null || echo "unknown"); \
+			echo "   PID $$PID: $$PNAME"; \
+		done; \
+		echo "🔨 Killing process(es) on port 8501..."; \
+		echo "$$PIDS" | xargs kill -9 2>/dev/null || true; \
+		sleep 1; \
+		if lsof -ti:8501 >/dev/null 2>&1; then \
+			echo "❌ Failed to free port 8501"; \
+			exit 1; \
+		else \
+			echo "✅ Port 8501 freed"; \
+		fi; \
+	else \
+		echo "✅ Port 8501 is available"; \
+	fi

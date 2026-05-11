@@ -16,25 +16,45 @@ Autonomous AI chief of staff that monitors GitHub, Linear, your calendar, and te
 
 ## ⚡ Install in 2 Minutes
 
-### Prerequisites
+### Option A — Homebrew (Recommended) 🍺
 
 ```bash
-# Install system dependencies (macOS)
-brew install node python@3.12 gh git make
+# Install
+brew tap ruimachado-orbit/axeng
+brew install axeng
 
-# Or check you have them
-node --version    # Need 18+
-python3 --version # Need 3.12+
-gh --version
+# Interactive setup wizard (no manual .env editing!)
+axeng configure
+
+# Start chatting with your AI chief of staff
+axeng chat
+
+# Or start the web UI
+axeng start
+open http://localhost:8501
 ```
 
-### Quick Start
+**Features:**
+- ✨ Interactive configuration wizard
+- 🎨 Beautiful terminal UI
+- 🔒 Password-masked inputs
+- ✅ Auto-generates .env
+- 💬 Built-in chat interface
+
+### Option B — Git Clone (Development)
 
 ```bash
 git clone https://github.com/ruimachado-orbit/axeng.git
 cd axeng
 
-# One command setup
+# Prerequisites
+brew install node python@3.12 gh git make
+
+# Interactive CLI setup
+pip install -r requirements.txt
+python3 bin/axeng-cli configure
+
+# Or one-command setup
 make quick-start
 
 # Or step by step:
@@ -43,9 +63,21 @@ make setup-env      # Create .env and config.yaml from templates
 make dev            # Start the UI
 ```
 
-**Open http://localhost:3000** 🎉
+**Open http://localhost:3000** for Next.js UI or http://localhost:8501 for Streamlit
 
-### Makefile Commands
+### CLI Commands (After Brew Install)
+
+```bash
+axeng configure     # Interactive setup wizard ⭐
+axeng chat          # Chat with Axeng
+axeng start         # Start the service
+axeng stop          # Stop the service
+axeng status        # Check if running
+axeng logs          # View logs
+axeng --help        # Show all commands
+```
+
+### Makefile Commands (Git Clone)
 
 ```bash
 make help           # Show all commands

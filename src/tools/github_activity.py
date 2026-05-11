@@ -22,10 +22,23 @@ def gh_api(endpoint: str) -> dict:
             ["gh", "api", endpoint],
             capture_output=True, text=True, timeout=30
         )
+        if result.returncode != 0:
+            if "authentication" in result.stderr.lower() or "not authenticated" in result.stderr.lower():
+                return {
+                    "error": "GitHub authentication failed",
+                    "hint": "Run 'gh auth login' or set GITHUB_TOKEN in 'axeng configure'",
+                    "setup_url": "https://github.com/settings/tokens"
+                }
         if result.returncode == 0 and result.stdout.strip():
             return json.loads(result.stdout)
-    except Exception:
-        pass
+    except FileNotFoundError:
+        return {
+            "error": "GitHub CLI (gh) not installed",
+            "hint": "Install with: brew install gh",
+            "setup_url": "https://cli.github.com"
+        }
+    except Exception as e:
+        return {"error": str(e)}
     return {}
 
 

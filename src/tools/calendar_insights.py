@@ -106,7 +106,9 @@ def calendar_insights(days: int = 7, meeting_type: str = "all") -> dict:
         if events:
             result["source"] = "obsidian"
         else:
-            result["error"] = "No calendar source available (Google API and Obsidian sync not configured)"
+            result["available"] = False
+            result["message"] = "Calendar integration not configured"
+            result["setup_instructions"] = "Run 'axeng configure' to set up Google Calendar integration"
             result["summary"] = {
                 "today_count": 0,
                 "this_week_count": 0,

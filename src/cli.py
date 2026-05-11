@@ -266,18 +266,31 @@ def chat():
         console.print("Run: [cyan]axeng configure[/cyan]\n")
         raise typer.Exit(1)
 
-    # Load LLM gateway
+    # Load LLM gateway and .env
     try:
-        sys.path.insert(0, str(Path(__file__).parent))
-        from llm_gateway import LLMGateway
+        # Load environment variables from AXENG_HOME
+        axeng_home = Path(os.getenv("AXENG_HOME", Path.home() / ".axeng"))
+        env_file = axeng_home / ".env"
 
-        # Initialize LLM with config
-        llm = LLMGateway()
+        if env_file.exists():
+            # Load .env file
+            for line in env_file.read_text().splitlines():
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key.strip()] = value.strip()
+
+        sys.path.insert(0, str(Path(__file__).parent))
+        import llm_gateway
 
         # Test connection
         console.print("[dim]Connecting to LLM...[/dim]")
-        test_response = llm.generate("Say 'ready' if you can hear me", max_tokens=10)
-        if not test_response:
+        test_response = llm_gateway.call(
+            provider=config.get("llm_provider", "opencode"),
+            prompt="Say 'ready'",
+            max_tokens=10
+        )
+        if not test_response or "error" in str(test_response).lower():
             console.print("[red]Error:[/red] Could not connect to LLM")
             console.print("Check your API keys in config\n")
             raise typer.Exit(1)
@@ -325,8 +338,12 @@ suggest running specific axeng commands or checking the web UI at http://localho
             console.print(f"\n[bold green]Axeng[/bold green]: ", end="")
 
             with console.status("[dim]Thinking...[/dim]"):
-                response = llm.generate(
-                    prompt=messages[-1]["content"],
+                # Build full prompt with system context
+                full_prompt = f"{system_prompt}\n\nUser: {user_input}\n\nAssistant:"
+
+                response = llm_gateway.call(
+                    provider=config.get("llm_provider", "opencode"),
+                    prompt=full_prompt,
                     max_tokens=500,
                     temperature=0.7
                 )

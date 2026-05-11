@@ -266,24 +266,46 @@ def chat():
         console.print("Run: [cyan]axeng configure[/cyan]\n")
         raise typer.Exit(1)
 
-    # Check if running
+    # Load LLM gateway
     try:
-        import requests
-        response = requests.get("http://localhost:8501", timeout=2)
-        if response.status_code != 200:
-            console.print("[yellow]Warning:[/yellow] Axeng service not running")
-            if Confirm.ask("Start Axeng now?"):
-                console.print("Starting Axeng...")
-                subprocess.run(["axeng", "start"])
-    except:
-        console.print("[yellow]Warning:[/yellow] Axeng service not running")
-        if Confirm.ask("Start Axeng now?"):
-            console.print("Starting Axeng...")
-            subprocess.run(["axeng", "start"])
+        sys.path.insert(0, str(Path(__file__).parent))
+        from llm_gateway import LLMGateway
+
+        # Initialize LLM with config
+        llm = LLMGateway()
+
+        # Test connection
+        console.print("[dim]Connecting to LLM...[/dim]")
+        test_response = llm.generate("Say 'ready' if you can hear me", max_tokens=10)
+        if not test_response:
+            console.print("[red]Error:[/red] Could not connect to LLM")
+            console.print("Check your API keys in config\n")
+            raise typer.Exit(1)
+        console.print("[green]✓[/green] Connected to LLM\n")
+
+    except Exception as e:
+        console.print(f"[red]Error loading LLM:[/red] {e}")
+        console.print("Run: [cyan]axeng configure[/cyan] to set up your LLM provider\n")
+        raise typer.Exit(1)
 
     console.print("[dim]Type 'exit' or 'quit' to end the chat[/dim]\n")
 
-    # Simple chat loop (would integrate with actual LLM in production)
+    # System prompt for Axeng
+    system_prompt = """You are Axeng, an AI engineering manager assistant. You help engineering managers with:
+- Team status and activity
+- GitHub PRs and issues
+- Linear project tracking
+- Sprint health reports
+- Risk analysis
+- 1:1 meeting prep
+- Engineering metrics and insights
+
+Be helpful, concise, and actionable. If you need data from GitHub or Linear that you don't have access to,
+suggest running specific axeng commands or checking the web UI at http://localhost:3000."""
+
+    conversation_history = []
+
+    # Chat loop with actual LLM
     while True:
         try:
             user_input = Prompt.ask("[bold cyan]You[/bold cyan]")
@@ -292,33 +314,35 @@ def chat():
                 console.print("\n[cyan]Goodbye! 👋[/cyan]\n")
                 break
 
-            # Here you would call the actual LLM
-            # For now, show helpful responses
+            # Add to conversation history
+            conversation_history.append({"role": "user", "content": user_input})
+
+            # Build full prompt with history
+            messages = [{"role": "system", "content": system_prompt}]
+            messages.extend(conversation_history[-10:])  # Keep last 10 messages
+
+            # Call LLM
             console.print(f"\n[bold green]Axeng[/bold green]: ", end="")
 
-            if "help" in user_input.lower():
-                response = """I can help you with:
-- Team status and activity
-- GitHub PRs and issues
-- Linear project tracking
-- Sprint health reports
-- Risk analysis
-- 1:1 meeting prep
+            with console.status("[dim]Thinking...[/dim]"):
+                response = llm.generate(
+                    prompt=messages[-1]["content"],
+                    max_tokens=500,
+                    temperature=0.7
+                )
 
-Try asking: "What PRs are waiting for review?" or "Show me sprint health"
-"""
-            elif "status" in user_input.lower():
-                response = "Let me check your team's status... (Feature coming soon - open http://localhost:8501 for the dashboard)"
-            elif "pr" in user_input.lower() or "pull request" in user_input.lower():
-                response = "Checking GitHub for open pull requests... (Feature coming soon - check the web dashboard)"
+            if response:
+                console.print(response + "\n")
+                conversation_history.append({"role": "assistant", "content": response})
             else:
-                response = f"I understand you're asking about: {user_input}\n\nFor now, visit the web dashboard at http://localhost:8501 for full reports.\n\nChat integration is coming soon!"
-
-            console.print(response + "\n")
+                console.print("[red]Error: No response from LLM[/red]\n")
 
         except KeyboardInterrupt:
             console.print("\n\n[cyan]Goodbye! 👋[/cyan]\n")
             break
+        except Exception as e:
+            console.print(f"\n[red]Error:[/red] {e}\n")
+            continue
 
 @app.command()
 def start():

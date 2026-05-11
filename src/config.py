@@ -15,8 +15,20 @@ def load(path: str | Path = None) -> dict:
     cfg_path = Path(path) if path else DEFAULT_CONFIG
 
     if not cfg_path.exists():
-        for search in [Path("config/config.yaml"),
-                       Path.cwd() / "config" / "config.yaml"]:
+        # Check AXENG_HOME first (for Homebrew installs)
+        axeng_home = os.getenv("AXENG_HOME")
+        search_paths = []
+
+        if axeng_home:
+            search_paths.append(Path(axeng_home) / "config" / "config.yaml")
+            search_paths.append(Path(axeng_home) / "config.yaml")
+
+        search_paths.extend([
+            Path("config/config.yaml"),
+            Path.cwd() / "config" / "config.yaml"
+        ])
+
+        for search in search_paths:
             if search.exists():
                 cfg_path = search
                 break

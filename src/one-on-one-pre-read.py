@@ -50,8 +50,8 @@ def parse_1on1_person(title: str, attendees: list) -> Optional[dict]:
     # Known team members by name pattern
     team_names = {
         "daniel": "Daniel Almeida", "pedro": "Pedro Ferreira",
-        "diogo": "Diogo Oliveira", "rikkarth": "Rikkarth",
-        "anastasiia": "Anastasiia", "joão": "João FCSantos", "joao": "João FCSantos",
+        "diogo": "Diogo Oliveira", "rikkarth": "Rikkarth R.",
+        "anastasiia": "Anastasiia Mishchenko", "joão": "João FCSantos", "joao": "João FCSantos",
         "luis": "Luis Santos",
     }
     # Try to extract name from title like "1:1 with Pedro" or "Pedro 1:1"
@@ -382,8 +382,8 @@ if __name__ == "__main__":
     parser.add_argument("--dry", action="store_true")
     args = parser.parse_args()
 
-    # Simulated attendees for CLI testing
-    attendees = [{"email": "pedro.ferreira@orbitplatform.ai", "displayName": "Pedro Ferreira"}]
+    # Parse person from title, no hardcoded attendees - let parse_1on1_person work from title
+    attendees = []
     result = generate_1on1_preread(args.title, attendees, dry=args.dry)
     if result:
         print(result)

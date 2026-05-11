@@ -248,10 +248,32 @@ def configure():
     ))
 
 @app.command()
-def chat():
+def chat(history: bool = typer.Option(False, "--history", help="Show chat history")):
     """
     Interactive chat with Axeng
     """
+    axeng_home = Path(os.getenv("AXENG_HOME", str(Path.home() / ".axeng")))
+    history_file = axeng_home / "chat_history.json"
+
+    # Show history if requested
+    if history:
+        if not history_file.exists():
+            console.print("[yellow]No chat history found[/yellow]")
+            return
+
+        import json
+        with open(history_file) as f:
+            history_data = json.load(f)
+
+        console.print("[bold]Chat History[/bold] (last 10 conversations)\n")
+        for entry in history_data[-10:]:
+            timestamp = entry.get("timestamp", "")
+            user_q = entry.get("user", "")[:60]
+            console.print(f"[dim]{timestamp}[/dim]")
+            console.print(f"  You: {user_q}")
+            console.print()
+        return
+
     console.print(Panel.fit(
         "[bold cyan]Axeng Chat[/bold cyan]\n"
         "Ask me about your team, projects, or engineering metrics",
@@ -265,6 +287,15 @@ def chat():
         console.print("[red]Error:[/red] Axeng not configured")
         console.print("Run: [cyan]axeng configure[/cyan]\n")
         raise typer.Exit(1)
+
+    # Load history
+    chat_history = []
+    if history_file.exists():
+        try:
+            with open(history_file) as f:
+                chat_history = json.load(f)
+        except:
+            chat_history = []
 
     # Load environment and orchestrator
     try:
@@ -322,6 +353,22 @@ def chat():
 
                     # orchestrate returns the synthesized text response
                     console.print(result + "\n")
+
+                    # Save to history
+                    from datetime import datetime
+                    chat_history.append({
+                        "timestamp": datetime.now().isoformat(),
+                        "user": user_input,
+                        "response": result[:200]  # Save first 200 chars
+                    })
+
+                    # Keep only last 50 conversations
+                    chat_history = chat_history[-50:]
+
+                    # Save to file
+                    history_file.parent.mkdir(parents=True, exist_ok=True)
+                    with open(history_file, 'w') as f:
+                        json.dump(chat_history, f, indent=2)
 
                 except Exception as e:
                     console.print(f"[red]Error: {e}[/red]\n")

@@ -84,6 +84,7 @@ axeng standup       # Generate daily standup brief
 axeng ooo           # Who's out of office today
 axeng issues        # Show my Linear issues
 axeng prs           # Show my GitHub pull requests
+axeng pr-health     # Analyze PR health & bottlenecks ⭐
 ```
 
 **Team Management (⭐ New!):**

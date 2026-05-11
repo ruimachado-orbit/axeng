@@ -121,9 +121,11 @@ def linear_issues(state: str = "open", limit: int = 50) -> dict:
         "state": state,
         "total": len(issues),
         "by_state": {
+            "Backlog": [i["identifier"] + " — " + i["title"] for i in by_type["backlog"]],
             "Todo (unstarted)": [i["identifier"] + " — " + i["title"] for i in by_type["unstarted"]],
             "In Progress (started)": [i["identifier"] + " — " + i["title"] for i in by_type["started"]],
             "Done (completed)": [i["identifier"] + " — " + i["title"] for i in by_type["completed"]],
+            "Canceled": [i["identifier"] + " — " + i["title"] for i in by_type["canceled"]],
         },
         "raw": issues
     }

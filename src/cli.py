@@ -544,6 +544,86 @@ def ooo():
         console.print(f"[red]Error:[/red] {e}")
 
 
+@app.command()
+def issues():
+    """Show my Linear issues"""
+    console.print("[cyan]Fetching your Linear issues...[/cyan]\n")
+
+    try:
+        axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+        result = subprocess.run(
+            ["python3", str(Path(__file__).parent / "tools" / "linear_tool.py"), "mine"],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "AXENG_HOME": axeng_home}
+        )
+
+        import json
+        data = json.loads(result.stdout)
+
+        if "error" in data:
+            console.print(f"[red]Error:[/red] {data['error']}")
+            console.print("Run: [cyan]axeng configure[/cyan]")
+            return
+
+        if data["total"] == 0:
+            console.print("[green]✓[/green] No issues assigned to you")
+        else:
+            console.print(f"[bold]{data['total']}[/bold] issue(s) assigned to you:\n")
+
+            # Group by state
+            for state, issues in data["by_state"].items():
+                if issues:
+                    console.print(f"[bold cyan]{state}:[/bold cyan]")
+                    for issue in issues:
+                        console.print(f"  • {issue}")
+                    console.print()
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+
+
+@app.command()
+def prs():
+    """Show my GitHub pull requests"""
+    console.print("[cyan]Fetching your GitHub PRs...[/cyan]\n")
+
+    try:
+        axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+        result = subprocess.run(
+            ["python3", str(Path(__file__).parent / "tools" / "github_activity.py")],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            env={**os.environ, "AXENG_HOME": axeng_home}
+        )
+
+        import json
+        data = json.loads(result.stdout) if result.stdout.strip() else {}
+
+        if "error" in data:
+            console.print(f"[red]Error:[/red] {data['error']}")
+            console.print("Run: [cyan]axeng configure[/cyan]")
+            return
+
+        # Parse PR data from github_activity output
+        prs = data.get("prs", []) if isinstance(data, dict) else []
+
+        if not prs:
+            console.print("[green]✓[/green] No open PRs")
+        else:
+            console.print(f"[bold]{len(prs)}[/bold] open PR(s):\n")
+            for pr in prs[:10]:  # Show first 10
+                console.print(f"  • [bold]{pr.get('title', 'Untitled')}[/bold]")
+                if pr.get('url'):
+                    console.print(f"    {pr['url']}")
+                console.print()
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+        console.print("\n[dim]Tip: Use 'axeng chat' and ask 'show my PRs'[/dim]")
+
+
 def main():
     """Main CLI entry point"""
     app()

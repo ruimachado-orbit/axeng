@@ -39,16 +39,28 @@ def get_last_sync_time() -> str:
         return "Never"
 
 
+def is_vault_configured() -> bool:
+    """Check if Obsidian vault is configured."""
+    try:
+        vault = vault_path()
+        return vault and Path(vault).exists()
+    except:
+        return False
+
+
 def list_person_profiles() -> list:
     """List all team member profiles."""
+    if not is_vault_configured():
+        return []
+
     profiles = []
     vault = vault_path()
     equipa_path = Path(vault) / "Rui" / "equipa"
-    
+
     if equipa_path.exists():
         for f in equipa_path.glob("*.md"):
             profiles.append(f.stem)
-    
+
     return profiles
 
 
@@ -248,9 +260,21 @@ def team_member_status() -> dict:
 # ─────────────────────────────────────────────
 
 if __name__ == "__main__":
+    # Check if vault is configured
+    if not is_vault_configured():
+        data = {
+            "available": False,
+            "message": "Obsidian vault not configured",
+            "setup_instructions": "Set OBSIDIAN_VAULT_PATH in .env or use file-based fallback in $AXENG_HOME/notes/",
+            "team_members": [],
+            "last_sync": "Never"
+        }
+        print(json.dumps(data, indent=2, default=str))
+        sys.exit(0)
+
     cmd = sys.argv[1] if len(sys.argv) > 1 else "summary"
     arg = sys.argv[2] if len(sys.argv) > 2 else ""
-    
+
     if cmd == "people":
         data = {"people": list_person_profiles()}
     elif cmd == "person":
@@ -277,5 +301,5 @@ if __name__ == "__main__":
     else:
         print("Usage: team_query.py [summary|people|person NAME|repos|metrics|blockers|search QUERY|status|all]")
         sys.exit(1)
-    
+
     print(json.dumps(data, indent=2, default=str))

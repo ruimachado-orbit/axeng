@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { MessageSquare, Loader2, X, Copy, Check, GitBranch, AlertCircle, Lightbulb, Calendar, TrendingUp, CheckCircle2 } from 'lucide-react'
+import { MessageSquare, Loader2, X, Copy, Check, TrendingUp, CheckCircle2, AlertCircle, Lightbulb, Calendar } from 'lucide-react'
 
 interface Generate1on1ButtonProps {
   person: string
@@ -31,60 +31,40 @@ function parsePrereadOutput(output: string): ParsedPreread {
 
   let currentSection = ''
 
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]
+  for (const line of lines) {
     const trimmed = line.trim()
 
-    // Title
     if (trimmed.includes('1:1 Pre-read')) {
       const match = trimmed.match(/1:1 Pre-read\s*[—–-]\s*(.+)/)
       if (match) parsed.title = match[1].replace(/\*/g, '').trim()
     }
 
-    // Sections
-    if (trimmed === 'Bottom line:') {
-      currentSection = 'bottomLine'
-    } else if (trimmed === 'Evidence:') {
-      currentSection = 'evidence'
-    } else if (trimmed.match(/^Risks?\s*\/\s*gaps?:/i)) {
-      currentSection = 'risks'
-    } else if (trimmed.match(/^Recommended actions?:/i)) {
-      currentSection = 'recommendations'
-    } else if (trimmed.match(/^\*?Talking points?\*?:?/i)) {
-      currentSection = 'talkingPoints'
-    } else if (trimmed.startsWith('_') && trimmed.endsWith('_')) {
-      parsed.footer = trimmed.replace(/_/g, '')
-    }
+    if (trimmed === 'Bottom line:') currentSection = 'bottomLine'
+    else if (trimmed === 'Evidence:') currentSection = 'evidence'
+    else if (trimmed.match(/^Risks?\s*\/\s*gaps?:/i)) currentSection = 'risks'
+    else if (trimmed.match(/^Recommended actions?:/i)) currentSection = 'recommendations'
+    else if (trimmed.match(/^\*?Talking points?\*?:?/i)) currentSection = 'talkingPoints'
+    else if (trimmed.startsWith('_') && trimmed.endsWith('_')) parsed.footer = trimmed.replace(/_/g, '')
 
-    // Parse content based on section
     if (currentSection === 'bottomLine' && trimmed && !trimmed.includes('Bottom line:')) {
       parsed.bottomLine += (parsed.bottomLine ? ' ' : '') + trimmed
     } else if (currentSection === 'evidence' && trimmed.startsWith('•')) {
       const content = trimmed.substring(1).trim()
-
-      // Parse structured evidence lines like "Linear open issues: 0"
       const match = content.match(/^(.+?):\s*(.+)$/)
       if (match) {
-        const label = match[1].trim()
-        const value = match[2].trim()
-        const isHighlight = value.includes('/Users/') || value.includes('MAI')
-
         parsed.evidence.push({
-          label,
-          value,
-          highlight: isHighlight
+          label: match[1].trim(),
+          value: match[2].trim(),
+          highlight: match[2].includes('/Users/') || match[2].includes('MAI')
         })
       } else {
         parsed.evidence.push({ label: '', value: content })
       }
-    } else if (currentSection === 'risks' && trimmed.startsWith('•')) {
-      parsed.risks.push(trimmed.substring(1).trim())
-    } else if (currentSection === 'risks' && trimmed.startsWith('-')) {
-      parsed.risks.push(trimmed.substring(1).trim())
-    } else if (currentSection === 'recommendations' && trimmed.startsWith('•')) {
-      parsed.recommendations.push(trimmed.substring(1).trim())
-    } else if (currentSection === 'talkingPoints' && trimmed.startsWith('•')) {
-      parsed.talkingPoints.push(trimmed.substring(1).trim())
+    } else if ((currentSection === 'risks' || currentSection === 'recommendations' || currentSection === 'talkingPoints') && (trimmed.startsWith('•') || trimmed.startsWith('-'))) {
+      const text = trimmed.substring(1).trim()
+      if (currentSection === 'risks') parsed.risks.push(text)
+      else if (currentSection === 'recommendations') parsed.recommendations.push(text)
+      else if (currentSection === 'talkingPoints') parsed.talkingPoints.push(text)
     }
   }
 
@@ -158,89 +138,63 @@ export function Generate1on1Button({ person }: Generate1on1ButtonProps) {
       )}
 
       {showModal && parsed && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-md z-50 flex items-center justify-center p-4 animate-fade-in">
-          <div className="glass border border-border/40 rounded-3xl shadow-2xl max-w-5xl w-full max-h-[85vh] overflow-hidden flex flex-col animate-fade-in-up">
-            {/* Header with gradient */}
-            <div className="relative px-8 py-6 bg-gradient-to-r from-indigo-500/10 to-purple-600/10 border-b border-border/40">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 text-xs font-medium mb-3">
-                    <Calendar className="w-3 h-3" />
-                    1:1 Meeting Pre-read
-                  </div>
-                  <h2 className="text-2xl font-bold gradient-text">{parsed.title || person}</h2>
-                  <p className="text-sm text-muted-foreground mt-1.5 flex items-center gap-1.5">
-                    <TrendingUp className="w-3.5 h-3.5" />
-                    {parsed.footer || 'Gerado agora'}
-                  </p>
+        <div
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in"
+          onClick={() => setShowModal(false)}
+        >
+          <div
+            className="bg-white dark:bg-gray-900 border border-gray-200 dark:border-gray-700 rounded-xl shadow-2xl max-w-3xl w-full max-h-[88vh] overflow-hidden flex flex-col"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="px-5 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between bg-gradient-to-r from-indigo-500/10 to-purple-500/10 shrink-0">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-1.5 mb-1">
+                  <Calendar className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                  <span className="text-xs font-medium text-indigo-600 dark:text-indigo-400">1:1 Pre-read</span>
                 </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={handleCopy}
-                    className="inline-flex items-center gap-2 px-4 py-2 text-sm rounded-xl glass-hover border border-border/40 transition-all"
-                  >
-                    {copied ? (
-                      <>
-                        <Check className="w-4 h-4 text-emerald-600" />
-                        <span className="text-emerald-600 font-medium">Copiado!</span>
-                      </>
-                    ) : (
-                      <>
-                        <Copy className="w-4 h-4" />
-                        Copiar
-                      </>
-                    )}
-                  </button>
-                  <button
-                    onClick={() => setShowModal(false)}
-                    className="p-2.5 rounded-xl hover:bg-secondary/80 transition-colors"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
+                <h2 className="text-lg font-bold text-gray-900 dark:text-gray-100">{parsed.title || person}</h2>
               </div>
-
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={handleCopy}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition text-gray-700 dark:text-gray-300"
+                >
+                  {copied ? <><Check className="w-3 h-3" /> Copiado</> : <><Copy className="w-3 h-3" /> Copiar</>}
+                </button>
+                <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-800 transition text-gray-700 dark:text-gray-300">
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-8 space-y-6">
-              {/* Bottom line - Hero section */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-gray-50 dark:bg-gray-950">
               {parsed.bottomLine && (
-                <div className="glass border border-emerald-500/30 rounded-2xl p-6 bg-gradient-to-br from-emerald-500/5 to-teal-600/5">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-emerald-500/10 flex items-center justify-center flex-shrink-0">
-                      <TrendingUp className="w-5 h-5 text-emerald-600" />
-                    </div>
-                    <div className="flex-1">
-                      <h3 className="font-bold text-base mb-2 text-emerald-700 dark:text-emerald-400">Bottom Line</h3>
-                      <p className="text-sm text-foreground leading-relaxed">{parsed.bottomLine}</p>
+                <div className="border border-emerald-500/30 rounded-lg p-4 bg-emerald-50 dark:bg-emerald-950/20">
+                  <div className="flex gap-3">
+                    <TrendingUp className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
+                    <div>
+                      <h3 className="font-semibold text-sm mb-1 text-emerald-700 dark:text-emerald-300">Bottom Line</h3>
+                      <p className="text-sm text-gray-800 dark:text-gray-200">{parsed.bottomLine}</p>
                     </div>
                   </div>
                 </div>
               )}
 
-              {/* Evidence */}
               {parsed.evidence.length > 0 && (
-                <div className="glass border border-indigo-500/30 rounded-2xl p-6 bg-indigo-500/5">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
-                      <CheckCircle2 className="w-5 h-5 text-indigo-600" />
-                    </div>
-                    <h3 className="font-bold text-lg">Evidence</h3>
+                <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 bg-white dark:bg-gray-900">
+                  <div className="flex gap-3 mb-3">
+                    <CheckCircle2 className="w-5 h-5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                    <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100">Evidence</h3>
                   </div>
-                  <div className="space-y-2">
+                  <div className="space-y-1.5 pl-8">
                     {parsed.evidence.map((item, i) => (
-                      <div key={i} className={`flex items-start gap-3 text-sm ${item.highlight ? 'bg-indigo-500/10 -mx-2 px-2 py-1.5 rounded-lg' : ''}`}>
-                        <span className="text-indigo-600 font-medium">•</span>
+                      <div key={i} className="text-xs">
                         {item.label ? (
-                          <div className="flex-1">
-                            <span className="font-medium text-foreground">{item.label}:</span>{' '}
-                            <span className={item.highlight ? 'text-indigo-600 dark:text-indigo-400 font-medium' : 'text-muted-foreground'}>
-                              {item.value}
-                            </span>
-                          </div>
+                          <><span className="font-medium text-gray-900 dark:text-gray-100">{item.label}:</span> <span className="text-gray-600 dark:text-gray-400">{item.value}</span></>
                         ) : (
-                          <span className="text-muted-foreground flex-1">{item.value}</span>
+                          <span className="text-gray-600 dark:text-gray-400">{item.value}</span>
                         )}
                       </div>
                     ))}
@@ -248,72 +202,54 @@ export function Generate1on1Button({ person }: Generate1on1ButtonProps) {
                 </div>
               )}
 
-              {/* Risks / Gaps */}
               {parsed.risks.length > 0 && (
-                <div className="glass border border-amber-500/30 rounded-2xl p-6 bg-amber-500/5">
-                  <div className="flex items-start gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center flex-shrink-0">
-                      <AlertCircle className="w-5 h-5 text-amber-600" />
-                    </div>
-                    <h3 className="font-bold text-lg">Risks / Gaps</h3>
+                <div className="border border-amber-500/30 rounded-lg p-4 bg-amber-50 dark:bg-amber-950/20">
+                  <div className="flex gap-3 mb-3">
+                    <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
+                    <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100">Risks / Gaps</h3>
                   </div>
-                  <div className="space-y-3">
-                    {parsed.risks.map((risk, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <span className="text-amber-600 font-medium text-sm">⚠</span>
-                        <p className="text-sm text-foreground leading-relaxed flex-1">{risk}</p>
-                      </div>
-                    ))}
+                  <div className="space-y-2 pl-8">
+                    {parsed.risks.map((risk, i) => <p key={i} className="text-xs text-gray-800 dark:text-gray-200">{risk}</p>)}
                   </div>
                 </div>
               )}
 
-              {/* Recommended Actions */}
               {parsed.recommendations.length > 0 && (
-                <div className="glass border border-blue-500/30 rounded-2xl p-6 bg-blue-500/5">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center">
-                      <Lightbulb className="w-5 h-5 text-blue-600" />
-                    </div>
-                    <h3 className="font-bold text-lg">Recommended Actions</h3>
+                <div className="border border-blue-500/30 rounded-lg p-4 bg-blue-50 dark:bg-blue-950/20">
+                  <div className="flex gap-3 mb-3">
+                    <Lightbulb className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
+                    <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100">Recommended Actions</h3>
                   </div>
-                  <div className="space-y-3">
+                  <div className="space-y-2 pl-8">
                     {parsed.recommendations.map((rec, i) => (
-                      <div key={i} className="flex items-start gap-3 group">
-                        <div className="w-6 h-6 rounded-lg bg-blue-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <span className="text-xs font-bold text-blue-600">{i + 1}</span>
-                        </div>
-                        <p className="text-sm text-foreground leading-relaxed group-hover:text-blue-600 transition-colors flex-1">
-                          {rec}
-                        </p>
+                      <div key={i} className="flex gap-2">
+                        <span className="text-blue-600 dark:text-blue-400 font-bold text-xs">{i + 1}.</span>
+                        <p className="text-xs text-gray-800 dark:text-gray-200 flex-1">{rec}</p>
                       </div>
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Talking points */}
               {parsed.talkingPoints.length > 0 && (
-                <div className="glass border border-purple-500/30 rounded-2xl p-6 bg-gradient-to-br from-purple-500/5 to-pink-600/5">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 rounded-xl bg-purple-500/10 flex items-center justify-center">
-                      <MessageSquare className="w-5 h-5 text-purple-600" />
-                    </div>
-                    <h3 className="font-bold text-lg">Talking Points</h3>
+                <div className="border border-purple-500/30 rounded-lg p-4 bg-purple-50 dark:bg-purple-950/20">
+                  <div className="flex gap-3 mb-3">
+                    <MessageSquare className="w-5 h-5 text-purple-600 dark:text-purple-400 shrink-0" />
+                    <h3 className="font-semibold text-sm text-gray-900 dark:text-gray-100">Talking Points</h3>
                   </div>
-                  <div className="space-y-3">
+                  <div className="space-y-2 pl-8">
                     {parsed.talkingPoints.map((point, i) => (
-                      <div key={i} className="flex items-start gap-3 group">
-                        <div className="w-6 h-6 rounded-lg bg-purple-500/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                          <span className="text-xs font-bold text-purple-600">{i + 1}</span>
-                        </div>
-                        <p className="text-sm text-foreground leading-relaxed group-hover:text-purple-600 transition-colors flex-1">
-                          {point}
-                        </p>
+                      <div key={i} className="flex gap-2">
+                        <span className="text-purple-600 dark:text-purple-400 font-bold text-xs">{i + 1}.</span>
+                        <p className="text-xs text-gray-800 dark:text-gray-200 flex-1">{point}</p>
                       </div>
                     ))}
                   </div>
                 </div>
+              )}
+
+              {parsed.footer && (
+                <p className="text-xs text-center text-gray-500 dark:text-gray-500 pt-2">{parsed.footer}</p>
               )}
             </div>
           </div>

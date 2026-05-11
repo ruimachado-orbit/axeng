@@ -1,7 +1,7 @@
 services:
   axeng:
     build:
-      context: .
+      context: ..
       dockerfile: docker/Dockerfile
     container_name: axeng
     restart: unless-stopped

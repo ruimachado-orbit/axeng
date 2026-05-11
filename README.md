@@ -10,31 +10,59 @@ Autonomous AI chief of staff that monitors GitHub, Linear, your calendar, and te
 
 ## ⚡ Install in 2 Minutes
 
-### Option A — Git Clone (fastest)
+### Option A — Automated Install (easiest)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ruimachado-orbit/axeng/main/install.sh | bash
+cd ~/.axeng
+# Edit .env and config/config.yaml with your keys
+make dev
+```
+
+### Option B — Git Clone + Make
 
 ```bash
 git clone https://github.com/ruimachado-orbit/axeng.git
 cd axeng
 
-# 1. Configure
-cp .env.example .env         # ← fill in your API keys (see section below)
-cp config/config.yaml.example config/config.yaml  # ← fill in your orgs/team
+# Quick start (installs deps, sets up configs, builds, and starts)
+make quick-start
 
-# 2. Start
-docker compose -f docker/docker-compose.yml up -d
+# Or step by step:
+make install        # Install dependencies
+make setup-env      # Create .env and config.yaml from templates
+# Edit .env and config/config.yaml with your API keys
+make dev            # Start in foreground
+# or: make start    # Start in background
+```
 
-# 3. Open
+### Option C — Homebrew
+
+```bash
+brew tap ruimachado-orbit/axeng
+brew install axeng
+
+# Edit config with your API keys
+nano $(brew --prefix)/var/axeng/.env
+
+# Start
+axeng
 open http://localhost:8501
 ```
 
-### Option B — Homebrew
+### Makefile Commands
 
 ```bash
-brew install ruimachado-orbit/axeng/axeng
-cp $(brew --prefix)/opt/axeng/.env.example $(brew --prefix)/opt/axeng/.env
-# Edit .env with your API keys, then:
-axeng
-open http://localhost:8501
+make help           # Show all commands
+make dev            # Start in foreground (see logs)
+make start          # Start in background
+make stop           # Stop service
+make logs           # View logs
+make build          # Rebuild Docker image
+make update         # Update to latest version
+make setup-google   # Instructions for Google Workspace setup
+make test-google    # Test Google authentication
+make clean          # Remove containers and volumes
 ```
 
 ---
@@ -131,8 +159,8 @@ LINEAR_API_KEY=***
 TELEGRAM_BOT_TOKEN=80|TEL..._ID=
 
 # Google Calendar (for OOO + 1:1 detection)
-GOOGLE_CLIENT_SECRET=***
-GOOGLE_TOKEN_PATH=***
+GOOGLE_CLIENT_SECRET=~/.hermes/secrets/google_client_secret.json
+GOOGLE_TOKEN_PATH=~/.hermes/secrets/google_token.json
 
 # Granola (for meeting notes, summaries, and transcripts)
 GRANOLA_API_KEY=***
@@ -176,6 +204,68 @@ email:
   from: "axeng@mycompany.com"
   gmail_script: "~/.hermes/skills/productivity/google-workspace/scripts/google_api.py"
 ```
+
+---
+
+## 📅 Google Workspace Setup (Optional)
+
+To enable Google Calendar and Gmail integration for OOO detection, 1:1 meeting insights, and email reports:
+
+### 1. Get OAuth Credentials
+
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project (or select existing)
+3. Enable APIs:
+   - Go to "APIs & Services" → "Library"
+   - Search and enable: **Google Calendar API**
+   - Search and enable: **Gmail API**
+4. Create OAuth 2.0 credentials:
+   - Go to "APIs & Services" → "Credentials"
+   - Click "Create Credentials" → "OAuth client ID"
+   - Configure OAuth consent screen (if prompted):
+     - Choose "External"
+     - Add app name, support email
+     - Add scopes: `calendar.readonly`, `gmail.readonly`
+     - Add your email as test user
+   - Application type: **Desktop app**
+   - Download the JSON file
+
+### 2. Save Client Secret
+
+```bash
+mkdir -p ~/.hermes/secrets
+mv ~/Downloads/client_secret_*.json ~/.hermes/secrets/google_client_secret.json
+```
+
+### 3. Authenticate (Generate Token)
+
+The Google API script handles OAuth automatically:
+
+```bash
+# Test authentication (opens browser)
+make test-google
+
+# Or directly:
+python3 ~/.hermes/skills/productivity/google-workspace/scripts/google_api.py auth test
+```
+
+This will:
+- Open your browser
+- Ask you to sign in to Google
+- Request Calendar and Gmail permissions
+- Save the token to `~/.hermes/secrets/google_token.json`
+
+### 4. Verify
+
+```bash
+# List calendar events
+python3 ~/.hermes/skills/productivity/google-workspace/scripts/google_api.py calendar list
+
+# List recent emails
+python3 ~/.hermes/skills/productivity/google-workspace/scripts/google_api.py gmail list --max 5
+```
+
+**That's it!** Axeng will now use Google Calendar for OOO detection and 1:1 meeting insights.
 
 ---
 

@@ -29,6 +29,21 @@ def calculate_deployment_frequency(days: int = 30) -> dict:
     Assumption: Merged PRs to main/master = deployments
     """
     repos = github_repos()
+
+    if not repos:
+        return {
+            "metric": "Deployment Frequency",
+            "error": "No GitHub repos found",
+            "hint": "Configure repos in config.yaml or ensure 'gh' CLI is authenticated",
+            "total_deployments": 0,
+            "period_days": days,
+            "per_day": 0.0,
+            "per_week": 0.0,
+            "dora_tier": "N/A",
+            "emoji": "⚪",
+            "by_repo": {}
+        }
+
     since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
 
     total_merges = 0

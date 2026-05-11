@@ -281,6 +281,19 @@ def chat(history: bool = typer.Option(False, "--history", help="Show chat histor
     ))
     console.print()
 
+    # Show smart suggestions
+    try:
+        sys.path.insert(0, str(Path(__file__).parent))
+        from smart_suggestions import get_smart_suggestions, format_suggestions_for_display
+
+        suggestions = get_smart_suggestions(limit=3)
+        if suggestions:
+            console.print(format_suggestions_for_display(suggestions))
+            console.print()
+    except Exception:
+        # Silently skip if suggestions fail
+        pass
+
     # Check if configured
     config = load_config()
     if not config.get("llm_provider"):
@@ -326,7 +339,16 @@ def chat(history: bool = typer.Option(False, "--history", help="Show chat histor
         console.print("Run: [cyan]axeng configure[/cyan] to set up your provider\n")
         raise typer.Exit(1)
 
-    console.print("[dim]Type 'exit' or 'quit' to end the chat[/dim]\n")
+    console.print("[dim]Type 'exit' or 'quit' to end the chat[/dim]")
+    console.print("[dim]Enter a number (1-3) to use a suggested query, or 'suggestions' to refresh[/dim]\n")
+
+    # Store suggestions for selection
+    current_suggestions = []
+    try:
+        from smart_suggestions import get_smart_suggestions
+        current_suggestions = get_smart_suggestions(limit=3)
+    except:
+        pass
 
     # Chat loop with orchestrator
     while True:
@@ -336,6 +358,23 @@ def chat(history: bool = typer.Option(False, "--history", help="Show chat histor
             if user_input.lower() in ["exit", "quit", "bye"]:
                 console.print("\n[cyan]Goodbye! 👋[/cyan]\n")
                 break
+
+            # Refresh suggestions
+            if user_input.lower() in ["suggestions", "suggest", "help"]:
+                try:
+                    from smart_suggestions import get_smart_suggestions, format_suggestions_for_display
+                    current_suggestions = get_smart_suggestions(limit=3)
+                    console.print("\n" + format_suggestions_for_display(current_suggestions) + "\n")
+                except Exception as e:
+                    console.print(f"[red]Error loading suggestions:[/red] {e}\n")
+                continue
+
+            # Check if user selected a suggestion by number
+            if user_input.strip() in ["1", "2", "3"] and current_suggestions:
+                idx = int(user_input.strip()) - 1
+                if 0 <= idx < len(current_suggestions):
+                    user_input = current_suggestions[idx]["query"]
+                    console.print(f"[dim]Using: {user_input}[/dim]\n")
 
             # Call orchestrator (it handles tool routing + LLM synthesis)
             console.print(f"\n[bold green]Axeng[/bold green]: ", end="")

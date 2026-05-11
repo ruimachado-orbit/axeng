@@ -171,18 +171,63 @@ def format_summary(vacations: list, month: str = None) -> str:
     return f"{len(vacations)} vacation(s) found{period}:\n" + "\n".join(lines)
 
 
+def who_is_ooo_today() -> dict:
+    """Get who is OOO today."""
+    from datetime import datetime
+
+    today = datetime.now().date()
+    result = list_vacations()
+
+    ooo_today = []
+    for v in result["vacations"]:
+        if v.get("start") and v.get("end"):
+            try:
+                start = datetime.strptime(v["start"], "%Y-%m-%d").date()
+                end = datetime.strptime(v["end"], "%Y-%m-%d").date()
+                if start <= today <= end:
+                    ooo_today.append(v)
+            except:
+                continue
+
+    return {
+        "tool": "vacations",
+        "filter": "today",
+        "date": str(today),
+        "total": len(ooo_today),
+        "vacations": ooo_today,
+        "summary": f"{len(ooo_today)} person(s) OOO today" if ooo_today else "No one is OOO today"
+    }
+
+
 def main():
     """CLI interface."""
     import argparse
 
     parser = argparse.ArgumentParser(description="Query Linear vacations/PTO")
-    parser.add_argument("action", choices=["list"], default="list", nargs="?",
-                       help="Action to perform")
+    parser.add_argument("action", choices=["list", "today", "week", "upcoming"],
+                       default="list", nargs="?",
+                       help="Action to perform (list, today, week, upcoming)")
     parser.add_argument("--month", help="Filter by month (e.g., 'may', '2026-05', 'may 2026')")
 
     args = parser.parse_args()
 
-    if args.action == "list":
+    if args.action == "today":
+        result = who_is_ooo_today()
+        print(json.dumps(result, indent=2))
+    elif args.action == "week":
+        # Get this week's vacations
+        from datetime import datetime, timedelta
+        today = datetime.now()
+        week_end = today + timedelta(days=7)
+        result = list_vacations(f"{today.month:02d}")
+        print(json.dumps(result, indent=2))
+    elif args.action == "upcoming":
+        # Get next 2 weeks
+        from datetime import datetime
+        today = datetime.now()
+        result = list_vacations(f"{today.month:02d}")
+        print(json.dumps(result, indent=2))
+    else:  # list
         result = list_vacations(args.month)
         print(json.dumps(result, indent=2))
 

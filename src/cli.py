@@ -469,6 +469,35 @@ def update():
         console.print("[red]Error updating[/red]")
         console.print(result.stderr)
 
+@app.command()
+def ooo():
+    """Show who is out of office today"""
+    console.print("[cyan]Checking vacations...[/cyan]\n")
+
+    try:
+        result = subprocess.run(
+            ["python3", str(Path(__file__).parent / "tools" / "vacations.py"), "today"],
+            capture_output=True,
+            text=True,
+            env={**os.environ, "AXENG_HOME": os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))}
+        )
+
+        import json
+        data = json.loads(result.stdout)
+
+        if data["total"] == 0:
+            console.print("[green]✓[/green] No one is OOO today")
+        else:
+            console.print(f"[yellow]{data['total']}[/yellow] person(s) OOO today:\n")
+            for v in data["vacations"]:
+                date_range = f"{v['start']} to {v['end']}"
+                console.print(f"  • [bold]{v['name']}[/bold]: {date_range}")
+                console.print(f"    {v['url']}\n")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+
+
 def main():
     """Main CLI entry point"""
     app()

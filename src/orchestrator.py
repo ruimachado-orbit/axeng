@@ -6,7 +6,7 @@ Config-driven tool registry and vault path.
 Optional LLM synthesis via llm_gateway (anthropic, openai, opencode,
 ollama, lmstudio, groq, openrouter, google).
 """
-import json, os, sys, subprocess
+import json, os, sys, subprocess, time
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -180,7 +180,7 @@ def analyze_context(goal: str) -> list:
 
 
 # ── Tool Execution ─────────────────────────────────────────────────────────────
-def run_tool(tool_name: str, args: list = None) -> dict:
+def run_tool(tool_name: str, args: list = None, quiet: bool = False) -> dict:
     if tool_name not in TOOLS:
         return {"error": f"Unknown tool: {tool_name}"}
 
@@ -191,19 +191,37 @@ def run_tool(tool_name: str, args: list = None) -> dict:
     if not script_path.exists():
         script_path = SCRIPT_DIR / tool["script"]
 
+    # Show progress indicator
+    if not quiet:
+        purpose = tool.get("purpose", tool_name)
+        print(f"  🔍 Querying {tool_name}... ({purpose})")
+
+    start_time = time.time()
+
     try:
         cmd = ["python3", str(script_path)] + args
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
 
+        elapsed = time.time() - start_time
+
         if result.returncode == 0:
+            if not quiet:
+                print(f"     ✓ Completed in {elapsed:.2f}s")
             try:
-                return json.loads(result.stdout)
+                data = json.loads(result.stdout)
+                data["_execution_time"] = round(elapsed, 2)
+                return data
             except:
-                return {"raw": result.stdout, "tool": tool_name}
+                return {"raw": result.stdout, "tool": tool_name, "_execution_time": round(elapsed, 2)}
         else:
-            return {"error": result.stderr, "tool": tool_name}
+            if not quiet:
+                print(f"     ✗ Failed after {elapsed:.2f}s")
+            return {"error": result.stderr, "tool": tool_name, "_execution_time": round(elapsed, 2)}
     except Exception as e:
-        return {"error": str(e), "tool": tool_name}
+        elapsed = time.time() - start_time
+        if not quiet:
+            print(f"     ✗ Error after {elapsed:.2f}s")
+        return {"error": str(e), "tool": tool_name, "_execution_time": round(elapsed, 2)}
 
 
 # ── LLM Synthesis ─────────────────────────────────────────────────────────────
@@ -248,6 +266,11 @@ Synthesize a clear, actionable response to the goal above. """
     if provider:
         providers = [p for p in providers if p == provider] + providers
 
+    if not quiet:
+        print(f"\n🤖 Synthesizing response with LLM...")
+
+    start_time = time.time()
+
     result = call_with_fallback(
         prompt,
         providers=providers,
@@ -257,16 +280,18 @@ Synthesize a clear, actionable response to the goal above. """
         json_output=False,
     )
 
+    elapsed = time.time() - start_time
+
     if result.get("ok"):
         if not quiet:
             model_used = result.get("model", "unknown")
             prov = result.get("provider", "unknown")
-            print(f"✅ LLM synthesis: {prov}/{model_used}")
+            print(f"   ✓ Completed in {elapsed:.2f}s using {prov}/{model_used}")
         return result["text"]
 
     # Fall back to logic-driven synthesis
     if not quiet:
-        print(f"⚠️ LLM unavailable ({result.get('error', 'unknown')}) — using rule-based synthesis")
+        print(f"   ✗ LLM unavailable ({result.get('error', 'unknown')}) — using rule-based synthesis")
     return _synthesize_logic(goal, tool_results)
 
 
@@ -529,10 +554,17 @@ def orchestrate(goal: str, auto_sync: bool = True, use_llm: bool = True,
 
     # Execute tools
     results = []
+    if not quiet:
+        print(f"\n📦 Executing {len(needed_tools)} tool(s)...\n")
+
     for tool in needed_tools:
-        result = run_tool(tool)
+        result = run_tool(tool, quiet=quiet)
         if result:
             results.append(result)
+
+    if not quiet:
+        total_time = sum(r.get("_execution_time", 0) for r in results)
+        print(f"\n⏱️  Total tool execution time: {total_time:.2f}s")
 
     if dry:
         print("\n--- Tool Results ---")

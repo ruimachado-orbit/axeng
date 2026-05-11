@@ -314,8 +314,7 @@ def chat():
                         goal=user_input,
                         auto_sync=False,  # Don't auto-sync on every query
                         use_llm=True,
-                        provider=config.get("llm_provider", "opencode"),
-                        max_tokens=1000
+                        provider=config.get("llm_provider", "opencode")
                     )
 
                     # orchestrate returns the synthesized text response

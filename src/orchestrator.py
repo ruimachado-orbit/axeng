@@ -83,6 +83,11 @@ def load_tool_registry() -> dict:
                 "args": ["sync"],
                 "purpose": "Sync Linear issues to Obsidian vault",
             },
+            "vacations": {
+                "script": "vacations.py",
+                "args": ["list"],
+                "purpose": "Get team vacations/PTO from Linear (who is OOO)",
+            },
             "granola_notes": {
                 "script": "granola_tool.py",
                 "args": ["notes", "--days", "30", "--limit", "20"],

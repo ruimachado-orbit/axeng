@@ -69,6 +69,26 @@ def load_tool_registry() -> dict:
                 "args": ["sync"],
                 "purpose": "Sync Linear issues to Obsidian vault",
             },
+            "granola_notes": {
+                "script": "granola_tool.py",
+                "args": ["notes", "--days", "30", "--limit", "20"],
+                "purpose": "List recent Granola meeting notes",
+            },
+            "granola_latest": {
+                "script": "granola_tool.py",
+                "args": ["latest", "--days", "30", "--transcript"],
+                "purpose": "Fetch the latest Granola note with transcript",
+            },
+            "granola_folders": {
+                "script": "granola_tool.py",
+                "args": ["folders"],
+                "purpose": "List Granola folders",
+            },
+            "granola_export": {
+                "script": "granola_tool.py",
+                "args": ["export", "--days", "30"],
+                "purpose": "Export recent Granola notes and transcripts to Markdown",
+            },
             "sync_all": {
                 "script": "team_sync.py",
                 "args": [],
@@ -114,6 +134,18 @@ def analyze_context(goal: str) -> list:
 
     if any(kw in goal_lower for kw in ["meeting", "calendar", "standup", "1:1", "one-on-one", "agenda", "schedule"]):
         needed.append("calendar_insights")
+
+    if any(kw in goal_lower for kw in [
+        "granola", "transcript", "transcription", "transcrições", "transcricoes",
+        "meeting notes", "meeting note", "call notes", "notes from", "notas da reunião",
+        "notas de reunião", "resumo da reunião"
+    ]):
+        if any(kw in goal_lower for kw in ["latest", "last", "recent", "summarize", "summary", "transcript", "transcrição", "transcricao", "resumo"]):
+            needed.append("granola_latest")
+        else:
+            needed.append("granola_notes")
+        if any(kw in goal_lower for kw in ["export", "markdown", "save", "guardar", "download"]):
+            needed.append("granola_export")
 
     if any(kw in goal_lower for kw in ["email", "decisão", "decision", "inbox", "unread", "thread"]):
         needed.append("email_intel")
@@ -320,6 +352,41 @@ def _synthesize_logic(goal: str, tool_results: list) -> str:
                     parts.append(f"\n✅ Sem blockers nos últimos 7 dias")
         if parts:
             return "\n".join(parts)
+
+    # Granola notes / transcripts
+    granola_results = [
+        r for r in tool_results
+        if isinstance(r, dict) and r.get("tool", "").startswith("granola")
+    ]
+    if granola_results:
+        parts = ["🎙️ **Granola**"]
+        for result in granola_results:
+            tool = result.get("tool", "")
+            if tool == "granola_notes":
+                notes = result.get("notes", [])
+                parts.append(f"• Notes found: {result.get('count', len(notes))}")
+                for note in notes[:5]:
+                    title = note.get("title") or note.get("name") or note.get("id") or "Untitled note"
+                    note_id = note.get("id") or note.get("note_id") or ""
+                    created = note.get("createdAt") or note.get("created_at") or note.get("updatedAt") or ""
+                    parts.append(f"  - {title} `{note_id}` {created}")
+            elif tool in ("granola_note", "granola_latest"):
+                note = result.get("note") or {}
+                title = note.get("title") or result.get("note_id")
+                summary = note.get("summary") or note.get("summary_text") or note.get("summary_markdown") or note.get("overview") or ""
+                parts.append(f"• {title}")
+                if summary:
+                    parts.append(str(summary)[:1200])
+                parts.append(f"• Transcript items: {result.get('transcript_items', 0)}")
+            elif tool == "granola_export":
+                files = result.get("files", [])
+                parts.append(f"• Exported {len(files)} files")
+                for path in files[:5]:
+                    parts.append(f"  - `{path}`")
+            elif result.get("error") or result.get("raw"):
+                raw = result.get("raw") or result
+                parts.append(f"• Error: {raw.get('error', 'unknown')}")
+        return "\n".join(parts)
 
     # Rich vault content
     for result in tool_results:

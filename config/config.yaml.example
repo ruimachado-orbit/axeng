@@ -154,3 +154,39 @@ chat_action_items:
     start: "08:00"
     end: "19:30"
     tz: "Europe/Lisbon"
+
+
+# ───────────────────────────────────────────────────────────────
+# GRANOLA — meeting notes and transcripts
+# ───────────────────────────────────────────────────────────────
+granola:
+  # API key is read from env as GRANOLA_API_KEY, not from config.yaml.
+  # Get one in Granola desktop: Settings → Connectors → API keys.
+  default_days: 30
+  export_dir: "~/.axeng/granola"
+
+
+# ───────────────────────────────────────────────────────────────
+# ORCHESTRATOR TOOLS — optional override
+# ───────────────────────────────────────────────────────────────
+# If omitted, Axeng uses its built-in default tool registry, including
+# github_activity, calendar_insights, Linear tools, team_query, and Granola.
+# Uncomment and customize only when you need to override defaults.
+# orchestrator:
+#   tools:
+#     - name: granola_notes
+#       script: granola_tool.py
+#       args: ["notes", "--days", "30", "--limit", "20"]
+#       purpose: "List recent Granola meeting notes"
+#     - name: granola_latest
+#       script: granola_tool.py
+#       args: ["latest", "--days", "30", "--transcript"]
+#       purpose: "Fetch the latest Granola note with transcript"
+#     - name: granola_folders
+#       script: granola_tool.py
+#       args: ["folders"]
+#       purpose: "List Granola folders"
+#     - name: granola_export
+#       script: granola_tool.py
+#       args: ["export", "--days", "30"]
+#       purpose: "Export recent Granola notes and transcripts to Markdown"

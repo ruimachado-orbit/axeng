@@ -49,6 +49,7 @@ open http://localhost:8501
 | **Linear API key** | Reads/writes issues + projects | [linear.app/settings/api](https://linear.app/settings/api) |
 | **Telegram bot** *(optional)* | Receives daily briefings | Talk to [@BotFather](https://t.me/BotFather) on Telegram |
 | **Google Calendar** *(optional)* | Detects OOO, 1:1 meetings | [Google Cloud Console](https://console.cloud.google.com/) |
+| **Granola API key** *(optional)* | Reads meeting notes, summaries, transcripts | Granola desktop → Settings → Connectors → API keys |
 | **Obsidian vault** *(optional)* | Stores 1:1 notes + team memory | [obsidian.md](https://obsidian.md/) |
 
 **That's it.** No server, no cloud account, no monthly fee. Everything runs on your own machine.
@@ -130,8 +131,11 @@ LINEAR_API_KEY=***
 TELEGRAM_BOT_TOKEN=80|TEL..._ID=
 
 # Google Calendar (for OOO + 1:1 detection)
-GOOGLE_CLIENT_SECRET=~/.her...json
-GOOGLE_TOKEN_PATH=~/.her...json
+GOOGLE_CLIENT_SECRET=***
+GOOGLE_TOKEN_PATH=***
+
+# Granola (for meeting notes, summaries, and transcripts)
+GRANOLA_API_KEY=***
 
 # World news in daily briefings
 NEWS_API_KEY=***
@@ -182,6 +186,16 @@ What shipped yesterday, who's blocked, PRs waiting >48h, who's OOO → **sent to
 
 ### 📋 1:1 Pre-reads (auto before every meeting)
 对方的 open issues, their commits, pending PRs, last 1:1 notes → **ready before you walk in**
+
+### 🎙️ Granola Meeting Intelligence
+List recent Granola notes, fetch summaries/transcripts, and export meetings to Markdown for follow-ups, 1:1 memory, and action-item extraction.
+
+```bash
+python3 src/tools/granola_tool.py notes --days 7 --limit 10
+python3 src/tools/granola_tool.py latest --days 30 --transcript
+python3 src/tools/granola_tool.py note not_xxxxxxxxxxxxxx --transcript
+python3 src/tools/granola_tool.py export --days 30
+```
 
 ### 📊 Weekly Team Report (Friday 17:00)
 Per-project status, MVP podium, commit breakdown, roadmap analysis → **posted to Linear + email**

@@ -16,6 +16,7 @@ from config import get, vault_path, llm_provider_order, llm_default_provider, ll
 from llm_gateway import call_with_fallback, status as llm_status, get_available_providers
 
 TOOLS_DIR = SCRIPT_DIR / "tools"
+SYSTEM_PROMPT_PATH = SCRIPT_DIR.parent / "prompts" / "engineering-manager-code-act.md"
 LAST_SYNC = Path.home() / ".hermes" / "scripts" / "team-intel" / "last-sync.json"
 
 
@@ -25,6 +26,19 @@ def read_md(path: str) -> str:
             return f.read()
     except:
         return ""
+
+
+def load_system_prompt() -> str:
+    """Load the Engineering Manager code-act system prompt with a safe fallback."""
+    prompt = read_md(str(SYSTEM_PROMPT_PATH)).strip()
+    if prompt:
+        return prompt
+    return (
+        "You are Axeng, an expert Engineering Manager AI assistant. "
+        "You help EMs with team management, project status, standups, reports, and decisions. "
+        "Act on available tool results, be concise and specific, name owners and next actions, "
+        "push back on delivery risk, and never invent missing data."
+    )
 
 
 # ── Tool Registry ─────────────────────────────────────────────────────────────
@@ -199,14 +213,7 @@ def llm_synthesize(goal: str, tool_results: list, provider: str = None) -> str:
     # Try to read vault context
     vault_context = _get_vault_context(goal)
 
-    system = (
-        "You are Axeng, an expert Engineering Manager AI assistant. "
-        "You help EM's with team management, project status, standups, reports, and decisions. "
-        "Always respond in the user's language (Portuguese or English). "
-        "Be concise, actionable, and specific. "
-        "Format with emoji, headers, and bullet points. "
-        "When data is missing, say so — don't make things up."
-    )
+    system = load_system_prompt()
 
     vault_section = f"Vault Context:\n{vault_context}" if vault_context else ""
     prompt = f"""Goal: {goal}

@@ -382,6 +382,39 @@ def sprint_health():
         })
     return {"projects": result, "lastSync": datetime.utcnow().isoformat()}
 
+@app.post("/api/generate-1on1")
+def generate_1on1(person: str):
+    """Generate 1:1 pre-read for a team member"""
+    import subprocess
+
+    # Run the 1:1 script
+    script_path = SRC_DIR / "one-on-one-pre-read.py"
+    result = subprocess.run(
+        [
+            "python3",
+            str(script_path),
+            "--title", f"1:1 with {person}",
+            "--dry"
+        ],
+        capture_output=True,
+        text=True,
+        cwd=str(AXENG_ROOT)
+    )
+
+    if result.returncode == 0:
+        return {
+            "ok": True,
+            "person": person,
+            "output": result.stdout,
+            "message": f"1:1 pre-read generated for {person}"
+        }
+    else:
+        return {
+            "ok": False,
+            "error": result.stderr,
+            "message": "Failed to generate 1:1 pre-read"
+        }
+
 # ── Run ───────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     port = int(os.environ.get("AXENG_API_PORT", 3457))

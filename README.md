@@ -16,6 +16,8 @@ Autonomous AI chief of staff that monitors GitHub, Linear, your calendar, and te
 
 ## ⚡ Install in 2 Minutes
 
+![Axeng CLI](docs/images/cli-screenshot.png)
+
 ### Option A — Homebrew (Recommended) 🍺
 
 ```bash
@@ -29,9 +31,8 @@ axeng configure
 # Start chatting with your AI chief of staff
 axeng chat
 
-# Or start the web UI
+# Or start the service
 axeng start
-open http://localhost:8501
 ```
 
 **Features:**
@@ -63,7 +64,7 @@ make setup-env      # Create .env and config.yaml from templates
 make dev            # Start the UI
 ```
 
-**Open http://localhost:3000** for Next.js UI or http://localhost:8501 for Streamlit
+**Open http://localhost:3000** for the Next.js UI
 
 ### CLI Commands (After Brew Install)
 
@@ -358,15 +359,6 @@ python3 src/tools/offboarding.py <github_login>
 
 ---
 
-## 🖥️ Web Dashboard
-
-At `http://localhost:8501` — Streamlit UI with:
-- Report history (standups, weekly reports, sprint health)
-- Team overview (commits, issues, PR activity)
-- Manual report triggers (run any report on demand)
-- Config editor (update teams/projects without editing YAML manually)
-
----
 
 ## 🔐 Your Keys Stay With You
 

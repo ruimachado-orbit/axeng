@@ -269,6 +269,23 @@ python3 ~/.hermes/skills/productivity/google-workspace/scripts/google_api.py gma
 
 ---
 
+## 🧠 Skills + System Prompt
+
+Axeng ships with workflow skills so it knows not just which tool to call, but how to operate like an Engineering Manager:
+
+- `granola-api` — Granola notes, summaries, transcripts, exports.
+- `linear-operations` — issues, projects, CRM leads, vacations, blockers.
+- `weekly-team-report` — weekly report generation, validation, delivery.
+- `github-team-intelligence` — PRs, reviews, stale work, repo signals.
+- `calendar-meeting-prep` — 1:1s, agendas, OOO, meeting pre-reads.
+- `team-sync-obsidian` — Obsidian-backed team memory and sync.
+- `chat-action-items` — chat-to-Linear action item extraction.
+- `offboarding` — GitHub + Linear access removal with dry-run safety.
+
+The LLM synthesis layer uses `prompts/engineering-manager-code-act.md`: a direct Engineering Manager system prompt with code-act behavior, evidence-first answers, ownership, delivery risk, and concrete next actions.
+
+---
+
 ## 🎯 All Features
 
 ### 🏃 Daily Standup Brief (Mon–Fri 07:30)

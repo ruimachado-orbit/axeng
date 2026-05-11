@@ -48,7 +48,13 @@ def linear_query(query: str, variables: dict = None) -> dict:
     env = load_env()
     key = env.get("LINEAR_API_KEY", "")
     if not key:
-        return {"errors": [{"message": "LINEAR_API_KEY not configured"}]}
+        return {
+            "errors": [{
+                "message": "LINEAR_API_KEY not configured",
+                "hint": "Run 'axeng configure' to set up Linear integration",
+                "setup_url": "https://linear.app/settings/api"
+            }]
+        }
 
     payload = {"query": query}
     if variables:

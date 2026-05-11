@@ -261,7 +261,6 @@ def chat(history: bool = typer.Option(False, "--history", help="Show chat histor
             console.print("[yellow]No chat history found[/yellow]")
             return
 
-        import json
         with open(history_file) as f:
             history_data = json.load(f)
 
@@ -508,7 +507,6 @@ def stop():
 def status():
     """Check Axeng service and integrations status"""
     import socket
-    import json
 
     def is_port_in_use(port):
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
@@ -614,7 +612,6 @@ def ooo():
             env={**os.environ, "AXENG_HOME": os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))}
         )
 
-        import json
         data = json.loads(result.stdout)
 
         if data["total"] == 0:
@@ -644,7 +641,6 @@ def issues():
             env={**os.environ, "AXENG_HOME": axeng_home}
         )
 
-        import json
         data = json.loads(result.stdout)
 
         if "error" in data:
@@ -684,7 +680,6 @@ def prs():
             env={**os.environ, "AXENG_HOME": axeng_home}
         )
 
-        import json
         data = json.loads(result.stdout) if result.stdout.strip() else {}
 
         if "error" in data:
@@ -725,7 +720,6 @@ def pr_health(days: int = typer.Option(14, "--days", "-d", help="Days to analyze
             env={**os.environ, "AXENG_HOME": axeng_home}
         )
 
-        import json
         data = json.loads(result.stdout) if result.stdout.strip() else {}
 
         if "error" in data:

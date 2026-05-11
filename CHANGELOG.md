@@ -2,6 +2,10 @@
 
 ## [2.1.1] - 2026-05-11
 
+### Fixed
+- **JSON import bug**: Removed redundant `import json` statements inside functions that caused "cannot access local variable" errors
+- **PR command timeout**: Increased timeout from 10s to 30s for GitHub API calls
+
 ### Added
 - **Smart Query Suggestions**: Context-aware query suggestions in `axeng chat`
   - Time-based suggestions (morning routine, end of day summary, etc.)

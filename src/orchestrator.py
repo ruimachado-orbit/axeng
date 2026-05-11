@@ -202,7 +202,7 @@ def run_tool(tool_name: str, args: list = None) -> dict:
 
 
 # ── LLM Synthesis ─────────────────────────────────────────────────────────────
-def llm_synthesize(goal: str, tool_results: list, provider: str = None) -> str:
+def llm_synthesize(goal: str, tool_results: list, provider: str = None, quiet: bool = False) -> str:
     """
     Use the LLM gateway to synthesize a response from tool results.
     Falls back to the logic-driven synthesizer if LLM is unavailable.
@@ -253,13 +253,15 @@ Synthesize a clear, actionable response to the goal above. """
     )
 
     if result.get("ok"):
-        model_used = result.get("model", "unknown")
-        prov = result.get("provider", "unknown")
-        print(f"✅ LLM synthesis: {prov}/{model_used}")
+        if not quiet:
+            model_used = result.get("model", "unknown")
+            prov = result.get("provider", "unknown")
+            print(f"✅ LLM synthesis: {prov}/{model_used}")
         return result["text"]
 
     # Fall back to logic-driven synthesis
-    print(f"⚠️ LLM unavailable ({result.get('error', 'unknown')}) — using rule-based synthesis")
+    if not quiet:
+        print(f"⚠️ LLM unavailable ({result.get('error', 'unknown')}) — using rule-based synthesis")
     return _synthesize_logic(goal, tool_results)
 
 
@@ -481,7 +483,7 @@ def _synthesize_logic(goal: str, tool_results: list) -> str:
 
 # ── Main Orchestrator ──────────────────────────────────────────────────────────
 def orchestrate(goal: str, auto_sync: bool = True, use_llm: bool = True,
-                provider: str = None, dry: bool = False) -> str:
+                provider: str = None, dry: bool = False, quiet: bool = False) -> str:
     """
     Main entry point: analyze goal, run tools, synthesize response.
 
@@ -491,10 +493,13 @@ def orchestrate(goal: str, auto_sync: bool = True, use_llm: bool = True,
         use_llm: Use LLM gateway for synthesis (default True)
         provider: Force a specific provider (None = use fallback order)
         dry: Run tools but skip synthesis (for debugging)
+        quiet: Suppress debug output (for CLI chat mode)
     """
-    print(f"🎯 Orchestrator: {goal}")
+    if not quiet:
+        print(f"🎯 Orchestrator: {goal}")
     if dry:
-        print("  [DRY MODE — skipping synthesis]")
+        if not quiet:
+            print("  [DRY MODE — skipping synthesis]")
         use_llm = False
 
     # Auto-sync if vault is stale
@@ -508,12 +513,14 @@ def orchestrate(goal: str, auto_sync: bool = True, use_llm: bool = True,
             needs_sync = True
 
         if needs_sync:
-            print("🔄 Auto-syncing vault...")
+            if not quiet:
+                print("🔄 Auto-syncing vault...")
             run_tool("sync_all")
 
     # Dynamic tool selection
     needed_tools = analyze_context(goal)
-    print(f"🛠️  Tools selected: {needed_tools}")
+    if not quiet:
+        print(f"🛠️  Tools selected: {needed_tools}")
 
     # Execute tools
     results = []
@@ -530,7 +537,7 @@ def orchestrate(goal: str, auto_sync: bool = True, use_llm: bool = True,
 
     # Synthesize
     if use_llm:
-        response = llm_synthesize(goal, results, provider=provider)
+        response = llm_synthesize(goal, results, provider=provider, quiet=quiet)
     else:
         response = _synthesize_logic(goal, results)
 

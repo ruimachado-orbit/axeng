@@ -10,59 +10,48 @@ Autonomous AI chief of staff that monitors GitHub, Linear, your calendar, and te
 
 ## ⚡ Install in 2 Minutes
 
-### Option A — Automated Install (easiest)
+### Prerequisites
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ruimachado-orbit/axeng/main/install.sh | bash
-cd ~/.axeng
-# Edit .env and config/config.yaml with your keys
-make dev
+# Install system dependencies (macOS)
+brew install node python@3.12 gh git make
+
+# Or check you have them
+node --version    # Need 18+
+python3 --version # Need 3.12+
+gh --version
 ```
 
-### Option B — Git Clone + Make
+### Quick Start
 
 ```bash
 git clone https://github.com/ruimachado-orbit/axeng.git
 cd axeng
 
-# Quick start (installs deps, sets up configs, builds, and starts)
+# One command setup
 make quick-start
 
 # Or step by step:
-make install        # Install dependencies
 make setup-env      # Create .env and config.yaml from templates
 # Edit .env and config/config.yaml with your API keys
-make dev            # Start in foreground
-# or: make start    # Start in background
+make dev            # Start the UI
 ```
 
-### Option C — Homebrew
-
-```bash
-brew tap ruimachado-orbit/axeng
-brew install axeng
-
-# Edit config with your API keys
-nano $(brew --prefix)/var/axeng/.env
-
-# Start
-axeng
-open http://localhost:8501
-```
+**Open http://localhost:3000** 🎉
 
 ### Makefile Commands
 
 ```bash
 make help           # Show all commands
-make dev            # Start in foreground (see logs)
-make start          # Start in background
-make stop           # Stop service
+make dev            # Start UI in dev mode (foreground)
+make start          # Start UI (background)
+make stop           # Stop all services
 make logs           # View logs
-make build          # Rebuild Docker image
-make update         # Update to latest version
-make setup-google   # Instructions for Google Workspace setup
+make build          # Install/update dependencies
+make update         # Pull latest + restart
+make setup-google   # Google Workspace setup instructions
 make test-google    # Test Google authentication
-make clean          # Remove containers and volumes
+make free-ports     # Free ports 3000/3457 if blocked
 ```
 
 ---
@@ -71,7 +60,8 @@ make clean          # Remove containers and volumes
 
 | What | Why | Where to get it |
 |------|-----|-----------------|
-| **Docker** | Runs the agent container | [docker.com](https://docs.docker.com/get-docker/) |
+| **Node.js 18+** | Runs the Next.js UI | `brew install node` |
+| **Python 3.12+** | Backend API + agent scripts | `brew install python@3.12` |
 | **LLM API key** | Generates all reports | See [LLM Setup](#-llm-providers) below |
 | **GitHub token** | Reads orgs, repos, PRs | `gh auth login` OR [github.com/settings/tokens](https://github.com/settings/tokens) |
 | **Linear API key** | Reads/writes issues + projects | [linear.app/settings/api](https://linear.app/settings/api) |
@@ -80,7 +70,7 @@ make clean          # Remove containers and volumes
 | **Granola API key** *(optional)* | Reads meeting notes, summaries, transcripts | Granola desktop → Settings → Connectors → API keys |
 | **Obsidian vault** *(optional)* | Stores 1:1 notes + team memory | [obsidian.md](https://obsidian.md/) |
 
-**That's it.** No server, no cloud account, no monthly fee. Everything runs on your own machine.
+**That's it.** No Docker, no cloud account, no monthly fee. Everything runs locally on your machine.
 
 ---
 

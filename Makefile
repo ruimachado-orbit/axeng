@@ -77,46 +77,58 @@ test-google: ## Test Google Workspace authentication (generates token)
 	@echo "✅ Google authentication successful!"
 	@echo "   Token saved to: ~/.hermes/secrets/google_token.json"
 
-dev: ## Start development environment (Docker)
-	@echo "🚀 Starting Axeng in dev mode..."
-	@make check-docker
-	@make setup-env
-	@make free-ports
-	docker compose -f docker/docker-compose.yml up
+dev: ## Start Next.js UI in development mode
+	@echo "🚀 Starting Axeng Next.js UI (dev mode)..."
+	@if [ ! -d "ui/nextjs/node_modules" ]; then \
+		echo ""; \
+		echo "📦 First time setup - installing dependencies..."; \
+		cd ui/nextjs && ./setup.sh; \
+		echo ""; \
+	fi
+	@cd ui/nextjs && ./dev.sh
 
-start: ## Start Axeng (background)
-	@echo "🚀 Starting Axeng..."
-	@make check-docker
-	@make setup-env
-	@make free-ports
-	docker compose -f docker/docker-compose.yml up -d
+start: ## Start Next.js UI (production-like)
+	@echo "🚀 Starting Axeng Next.js UI..."
+	@if [ ! -d "ui/nextjs/node_modules" ]; then \
+		echo ""; \
+		echo "📦 First time setup - installing dependencies..."; \
+		cd ui/nextjs && ./setup.sh; \
+		echo ""; \
+	fi
+	@cd ui/nextjs && ./start.sh
+
+stop: ## Stop Next.js UI
+	@echo "🛑 Stopping Axeng UI..."
+	@pkill -f "next dev" || true
+	@pkill -f "api_server.py" || true
+	@echo "✅ UI stopped"
+
+logs: ## View Next.js logs
+	@echo "📋 Viewing logs..."
 	@echo ""
-	@echo "✅ Axeng is running at http://localhost:8501"
-	@echo "   Logs: make logs"
-	@echo "   Stop: make stop"
+	@echo "API logs:"
+	@tail -f /tmp/axeng-api.log 2>/dev/null || echo "API not running or no logs yet"
+	@echo ""
+	@echo "Next.js logs:"
+	@tail -f /tmp/axeng-nextjs.log 2>/dev/null || echo "Next.js not running or no logs yet"
 
-stop: ## Stop Axeng
-	@echo "🛑 Stopping Axeng..."
-	docker compose -f docker/docker-compose.yml down
-	@echo "✅ Axeng stopped"
+build: ## Install/update dependencies
+	@echo "🔨 Building Axeng UI..."
+	@cd ui/nextjs && npm install
+	@echo "✅ Dependencies installed"
 
-logs: ## View logs (follow)
-	docker compose -f docker/docker-compose.yml logs -f
-
-build: ## Rebuild Docker image
-	@echo "🔨 Building Docker image..."
-	@make check-docker
-	docker compose -f docker/docker-compose.yml build
-
-rebuild: ## Rebuild and restart
+rebuild: ## Reinstall dependencies and restart
+	@echo "🔨 Rebuilding..."
+	@cd ui/nextjs && rm -rf node_modules package-lock.json
 	@make build
 	@make start
 
 update: ## Pull latest and restart
 	@echo "📦 Updating Axeng..."
 	git pull
-	@make rebuild
-	@echo "✅ Axeng updated and running at http://localhost:8501"
+	@cd ui/nextjs && npm install
+	@make start
+	@echo "✅ Axeng updated and running at http://localhost:3000"
 
 clean: ## Remove containers and volumes
 	@echo "🧹 Cleaning up..."
@@ -133,7 +145,7 @@ test-services: ## Test connectivity to all configured services
 	@python3 test_services.py
 
 # ── Quick start ────────────────────────────────────────────────────
-quick-start: install setup-env build start ## Complete setup and start (one command)
+quick-start: setup-env build start ## Complete setup and start (one command)
 	@echo ""
 	@echo "🎉 Axeng is ready!"
 	@echo ""
@@ -143,62 +155,33 @@ quick-start: install setup-env build start ## Complete setup and start (one comm
 	@echo "  3. (Optional) Set up Google Workspace: make setup-google"
 	@echo "  4. Restart: make restart"
 	@echo ""
-	@echo "Access: http://localhost:8501"
+	@echo "Access: http://localhost:3000"
 
 restart: stop start ## Restart Axeng
 
 check: ## Verify setup and dependencies
 	@./bin/check-setup
 
-check-docker: ## Check if Docker is running
-	@if ! docker ps >/dev/null 2>&1; then \
-		echo "❌ Docker is not running"; \
-		echo ""; \
-		echo "Please start Docker Desktop:"; \
-		echo "  • macOS: Open Docker.app or run: open -a Docker"; \
-		echo "  • Linux: sudo systemctl start docker"; \
-		echo ""; \
-		echo "Then try again."; \
-		exit 1; \
-	fi
-
-free-ports: ## Free required ports (8501) before starting
-	@echo "🔍 Checking for processes on port 8501..."
-	@PIDS=$$(lsof -ti:8501 2>/dev/null); \
-	if [ -n "$$PIDS" ]; then \
-		echo "⚠️  Port 8501 is in use by process(es): $$PIDS"; \
-		for PID in $$PIDS; do \
-			PNAME=$$(ps -p $$PID -o comm= 2>/dev/null || echo "unknown"); \
-			echo "   PID $$PID: $$PNAME"; \
-		done; \
-		echo "🔨 Killing process(es) on port 8501..."; \
-		echo "$$PIDS" | xargs kill -9 2>/dev/null || true; \
-		sleep 1; \
-		if lsof -ti:8501 >/dev/null 2>&1; then \
-			echo "❌ Failed to free port 8501"; \
-			exit 1; \
+free-ports: ## Free required ports (3000, 3457) before starting
+	@echo "🔍 Checking for processes on ports 3000 and 3457..."
+	@for PORT in 3000 3457; do \
+		PIDS=$$(lsof -ti:$$PORT 2>/dev/null); \
+		if [ -n "$$PIDS" ]; then \
+			echo "⚠️  Port $$PORT is in use by process(es): $$PIDS"; \
+			for PID in $$PIDS; do \
+				PNAME=$$(ps -p $$PID -o comm= 2>/dev/null || echo "unknown"); \
+				echo "   PID $$PID: $$PNAME"; \
+			done; \
+			echo "🔨 Killing process(es) on port $$PORT..."; \
+			echo "$$PIDS" | xargs kill -9 2>/dev/null || true; \
+			sleep 1; \
+			if lsof -ti:$$PORT >/dev/null 2>&1; then \
+				echo "❌ Failed to free port $$PORT"; \
+				exit 1; \
+			else \
+				echo "✅ Port $$PORT freed"; \
+			fi; \
 		else \
-			echo "✅ Port 8501 freed"; \
+			echo "✅ Port $$PORT is available"; \
 		fi; \
-	else \
-		echo "✅ Port 8501 is available"; \
-	fi
-
-# ── Next.js UI targets ────────────────────────────────────────────────
-ui-setup: ## Set up Next.js UI (install dependencies)
-	@echo "📦 Setting up Next.js UI..."
-	@cd ui/nextjs && ./setup.sh
-
-ui-dev: ## Start Next.js UI in development mode
-	@echo "🚀 Starting Next.js UI (dev mode)..."
-	@cd ui/nextjs && ./dev.sh
-
-ui-start: ## Start Next.js UI (production-like)
-	@echo "🚀 Starting Next.js UI..."
-	@cd ui/nextjs && ./start.sh
-
-ui-stop: ## Stop Next.js UI processes
-	@echo "🛑 Stopping Next.js UI..."
-	@pkill -f "next dev" || true
-	@pkill -f "api_server.py" || true
-	@echo "✅ UI stopped"
+	done

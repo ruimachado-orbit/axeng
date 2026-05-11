@@ -1,4 +1,4 @@
-.PHONY: help install dev build start stop logs clean update test setup-google check free-ports check-docker
+.PHONY: help install dev build start stop logs clean update test setup-google check free-ports check-docker test-services
 
 # ══════════════════════════════════════════════════════════════════
 # Axeng — Makefile
@@ -127,6 +127,10 @@ test: ## Run tests
 	@echo "🧪 Running tests..."
 	python -m pytest tests/
 	@echo "✅ Tests passed"
+
+test-services: ## Test connectivity to all configured services
+	@echo "🔌 Testing service connectivity..."
+	@python3 test_services.py
 
 # ── Quick start ────────────────────────────────────────────────────
 quick-start: install setup-env build start ## Complete setup and start (one command)

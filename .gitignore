@@ -55,9 +55,12 @@ reports/*.html
 vault/
 *.md.archived
 
-# Credentials
+# Credentials (but allow package.json and tsconfig.json)
 *.json
 !config/*.example.json
+!package.json
+!tsconfig.json
+!package-lock.json
 credentials/
 
 # Docker

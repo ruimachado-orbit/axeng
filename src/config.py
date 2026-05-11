@@ -68,8 +68,47 @@ def github_orgs() -> list:
     return get("github.orgs", [])
 
 
+_cached_repos = None
+
 def github_repos() -> list:
-    return get("github.repos", [])
+    """
+    Get GitHub repos to analyze.
+    Auto-discovers repos if none configured.
+    """
+    global _cached_repos
+
+    configured = get("github.repos", [])
+
+    if configured:
+        return configured
+
+    # Use cache if available
+    if _cached_repos is not None:
+        return _cached_repos
+
+    # Auto-discover repos using gh CLI
+    try:
+        import subprocess
+        import json
+
+        # Get repos the user has contributed to recently (limit to 10 for speed)
+        result = subprocess.run(
+            ["gh", "repo", "list", "--limit", "10", "--json", "nameWithOwner"],
+            capture_output=True,
+            text=True,
+            timeout=10
+        )
+
+        if result.returncode == 0:
+            repos_data = json.loads(result.stdout)
+            discovered = [r["nameWithOwner"] for r in repos_data]
+            _cached_repos = discovered
+            return discovered
+    except:
+        pass
+
+    _cached_repos = []
+    return []
 
 
 def github_name_map() -> dict:

@@ -322,17 +322,34 @@ Try asking: "What PRs are waiting for review?" or "Show me sprint health"
 
 @app.command()
 def start():
-    """Start Axeng service"""
-    console.print("[cyan]Starting Axeng...[/cyan]")
+    """Start Axeng Next.js UI"""
+    console.print("[cyan]Starting Axeng Next.js UI...[/cyan]")
 
     # Check configuration
     if not CONFIG_FILE.exists():
-        console.print("[red]Error:[/red] Not configured")
-        console.print("Run: [cyan]axeng configure[/cyan]\n")
-        raise typer.Exit(1)
+        console.print("[yellow]Warning:[/yellow] Not configured via CLI")
+        console.print("You can run: [cyan]axeng configure[/cyan]")
+        console.print("Or edit: [cyan]~/.hermes/.env[/cyan] and [cyan]config/config.yaml[/cyan]\n")
 
-    # Run make start
+    # Find axeng directory
     axeng_dir = Path(__file__).parent.parent
+
+    # Check if Next.js dependencies are installed
+    ui_dir = axeng_dir / "ui" / "nextjs"
+    if not (ui_dir / "node_modules").exists():
+        console.print("[yellow]Installing dependencies...[/yellow]")
+        result = subprocess.run(
+            ["npm", "install"],
+            cwd=ui_dir,
+            capture_output=True,
+            text=True
+        )
+        if result.returncode != 0:
+            console.print("[red]Error installing dependencies[/red]")
+            console.print(result.stderr)
+            raise typer.Exit(1)
+
+    # Start using make
     result = subprocess.run(
         ["make", "start"],
         cwd=axeng_dir,
@@ -342,7 +359,9 @@ def start():
 
     if result.returncode == 0:
         console.print("[green]✓[/green] Axeng started")
-        console.print("Open: [link]http://localhost:8501[/link]")
+        console.print("\n[bold]Next.js UI:[/bold] [link]http://localhost:3000[/link]")
+        console.print("[bold]API:[/bold] [link]http://localhost:3457[/link]")
+        console.print("\n[dim]Logs: tail -f /tmp/axeng-*.log[/dim]")
     else:
         console.print("[red]Error starting Axeng[/red]")
         console.print(result.stderr)

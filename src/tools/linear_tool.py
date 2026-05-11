@@ -347,6 +347,263 @@ Total: **{summary['my_tasks']}** issues atribuídos
 
 
 # ─────────────────────────────────────────────
+# TOOL: linear_project_health — Project analytics
+# ─────────────────────────────────────────────
+
+def linear_project_health(days: int = 30) -> dict:
+    """
+    Analyze Linear projects with health scores.
+
+    Returns:
+    - Issues grouped by project/team
+    - Project health metrics (velocity, staleness, completion rate)
+    - Risk indicators
+    """
+    # Fetch all projects
+    projects_query = """
+    {
+      projects(first: 50) {
+        nodes {
+          id name state
+          lead { name email }
+          targetDate startDate
+          issues {
+            nodes {
+              identifier title state { name type }
+              createdAt updatedAt completedAt
+              priority assignee { name }
+            }
+          }
+        }
+      }
+    }
+    """
+
+    result = linear_query(projects_query)
+    projects = result.get("data", {}).get("projects", {}).get("nodes", [])
+
+    if not projects:
+        # Fallback: group by team if no projects
+        return _analyze_by_teams(days)
+
+    project_health = []
+    now = datetime.now()
+    cutoff = now - timedelta(days=days)
+
+    for project in projects:
+        issues = project.get("issues", {}).get("nodes", [])
+
+        if not issues:
+            continue
+
+        # Calculate metrics
+        total_issues = len(issues)
+        completed = [i for i in issues if i.get("state", {}).get("type") == "completed"]
+        in_progress = [i for i in issues if i.get("state", {}).get("type") == "started"]
+        todo = [i for i in issues if i.get("state", {}).get("type") == "unstarted"]
+
+        completion_rate = (len(completed) / total_issues * 100) if total_issues > 0 else 0
+
+        # Calculate staleness (issues not updated in 7+ days)
+        stale_cutoff = now - timedelta(days=7)
+        stale_issues = []
+        for issue in in_progress + todo:
+            try:
+                updated = datetime.fromisoformat(issue.get("updatedAt", "").replace("Z", "+00:00"))
+                if updated.replace(tzinfo=None) < stale_cutoff:
+                    stale_issues.append(issue)
+            except:
+                pass
+
+        staleness_rate = (len(stale_issues) / len(in_progress + todo) * 100) if (in_progress + todo) else 0
+
+        # Calculate velocity (issues completed in last N days)
+        recent_completed = []
+        for issue in completed:
+            try:
+                completed_at = issue.get("completedAt")
+                if completed_at:
+                    completed_date = datetime.fromisoformat(completed_at.replace("Z", "+00:00"))
+                    if completed_date.replace(tzinfo=None) > cutoff:
+                        recent_completed.append(issue)
+            except:
+                pass
+
+        velocity = len(recent_completed) / days  # issues/day
+
+        # Calculate health score (0-100)
+        health_score = (
+            completion_rate * 0.4 +  # 40% weight
+            (100 - staleness_rate) * 0.3 +  # 30% weight
+            min(velocity * 10, 30)  # 30% weight (capped at 30)
+        )
+
+        # Determine health status
+        if health_score >= 80:
+            health_status = "healthy"
+            health_emoji = "🟢"
+        elif health_score >= 60:
+            health_status = "moderate"
+            health_emoji = "🟡"
+        else:
+            health_status = "at_risk"
+            health_emoji = "🔴"
+
+        # Risk factors
+        risks = []
+        if staleness_rate > 50:
+            risks.append("High staleness - many issues not updated in 7+ days")
+        if len(in_progress) > len(completed) * 2:
+            risks.append("Too much WIP - more in progress than completed")
+        if completion_rate < 30 and total_issues > 5:
+            risks.append("Low completion rate - less than 30% done")
+        if velocity < 0.5:
+            risks.append("Low velocity - less than 0.5 issues/day")
+
+        project_data = {
+            "name": project.get("name"),
+            "id": project.get("id"),
+            "state": project.get("state"),
+            "lead": project.get("lead", {}).get("name", "Unassigned"),
+            "target_date": project.get("targetDate"),
+            "metrics": {
+                "total_issues": total_issues,
+                "completed": len(completed),
+                "in_progress": len(in_progress),
+                "todo": len(todo),
+                "completion_rate": round(completion_rate, 1),
+                "staleness_rate": round(staleness_rate, 1),
+                "velocity": round(velocity, 2),
+                "stale_count": len(stale_issues)
+            },
+            "health": {
+                "score": round(health_score, 1),
+                "status": health_status,
+                "emoji": health_emoji
+            },
+            "risks": risks,
+            "top_stale_issues": [
+                i.get("identifier") + " — " + i.get("title")
+                for i in stale_issues[:3]
+            ]
+        }
+
+        project_health.append(project_data)
+
+    # Sort by health score (lowest first - show problems)
+    project_health.sort(key=lambda x: x["health"]["score"])
+
+    return {
+        "tool": "linear_project_health",
+        "timestamp": now.isoformat(),
+        "period_days": days,
+        "total_projects": len(project_health),
+        "projects": project_health,
+        "summary": _generate_project_insights(project_health)
+    }
+
+
+def _analyze_by_teams(days: int) -> dict:
+    """Fallback: analyze by teams if no projects exist."""
+    # Get all teams
+    teams_query = "{ teams { nodes { id name key } } }"
+    result = linear_query(teams_query)
+    teams = result.get("data", {}).get("teams", {}).get("nodes", [])
+
+    team_health = []
+    now = datetime.now()
+
+    for team in teams:
+        team_key = team.get("key")
+
+        # Get team issues
+        issues_query = f"""
+        query($first: Int!) {{
+          team(id: "{team.get('id')}") {{
+            issues(first: $first) {{
+              nodes {{
+                identifier title state {{ name type }}
+                createdAt updatedAt completedAt
+              }}
+            }}
+          }}
+        }}
+        """
+
+        result = linear_query(issues_query, {"first": 100})
+        issues = result.get("data", {}).get("team", {}).get("issues", {}).get("nodes", [])
+
+        if not issues:
+            continue
+
+        # Same metrics calculation as projects
+        total = len(issues)
+        completed = [i for i in issues if i.get("state", {}).get("type") == "completed"]
+        completion_rate = (len(completed) / total * 100) if total > 0 else 0
+
+        team_health.append({
+            "name": team.get("name"),
+            "key": team_key,
+            "metrics": {
+                "total_issues": total,
+                "completed": len(completed),
+                "completion_rate": round(completion_rate, 1)
+            }
+        })
+
+    return {
+        "tool": "linear_project_health",
+        "timestamp": now.isoformat(),
+        "period_days": days,
+        "mode": "teams",
+        "total_teams": len(team_health),
+        "teams": team_health,
+        "summary": {"message": "Analyzed by teams (no projects found)"}
+    }
+
+
+def _generate_project_insights(projects: list) -> dict:
+    """Generate insights from project health data."""
+    if not projects:
+        return {"message": "No projects to analyze"}
+
+    at_risk = [p for p in projects if p["health"]["status"] == "at_risk"]
+    moderate = [p for p in projects if p["health"]["status"] == "moderate"]
+    healthy = [p for p in projects if p["health"]["status"] == "healthy"]
+
+    insights = {
+        "at_risk_count": len(at_risk),
+        "moderate_count": len(moderate),
+        "healthy_count": len(healthy),
+        "avg_health_score": round(sum(p["health"]["score"] for p in projects) / len(projects), 1),
+        "recommendations": []
+    }
+
+    if at_risk:
+        insights["recommendations"].append({
+            "priority": "high",
+            "message": f"{len(at_risk)} project(s) at risk",
+            "action": f"Review: {', '.join(p['name'] for p in at_risk[:3])}"
+        })
+
+    if moderate:
+        insights["recommendations"].append({
+            "priority": "medium",
+            "message": f"{len(moderate)} project(s) need attention",
+            "action": "Monitor staleness and velocity"
+        })
+
+    if not insights["recommendations"]:
+        insights["recommendations"].append({
+            "priority": "low",
+            "message": "All projects healthy",
+            "action": "Keep up the good work!"
+        })
+
+    return insights
+
+
+# ─────────────────────────────────────────────
 # CLI entry
 # ─────────────────────────────────────────────
 
@@ -368,7 +625,10 @@ if __name__ == "__main__":
         result = linear_sync()
     elif cmd == "summary":
         result = linear_summary()
+    elif cmd == "project-health":
+        days = int(sys.argv[2]) if len(sys.argv) > 2 else 30
+        result = linear_project_health(days)
     else:
-        result = {"error": f"Unknown command: {cmd}"}
+        result = {"error": f"Unknown command: {cmd}. Available: issues, mine, blockers, person, sync, summary, project-health"}
 
     print(json.dumps(result, indent=2, default=str))

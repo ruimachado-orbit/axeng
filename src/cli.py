@@ -680,7 +680,7 @@ def prs():
             ["python3", str(Path(__file__).parent / "tools" / "github_activity.py")],
             capture_output=True,
             text=True,
-            timeout=10,
+            timeout=30,  # Increased from 10s for GitHub API
             env={**os.environ, "AXENG_HOME": axeng_home}
         )
 

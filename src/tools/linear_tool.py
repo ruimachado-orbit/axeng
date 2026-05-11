@@ -17,7 +17,15 @@ from config import get, linear_workspace, vault_path
 
 def load_env():
     """Load API key from .env file."""
-    env_file = Path.home() / ".hermes" / ".env"
+    import os
+
+    # Check AXENG_HOME first (for Homebrew installs)
+    axeng_home = os.getenv("AXENG_HOME")
+    if axeng_home:
+        env_file = Path(axeng_home) / ".env"
+    else:
+        env_file = Path.home() / ".hermes" / ".env"
+
     env = {}
     if env_file.exists():
         with open(env_file) as f:
@@ -26,6 +34,12 @@ def load_env():
                 if line and "=" in line and not line.startswith("#"):
                     k, v = line.split("=", 1)
                     env[k.strip()] = v.strip()
+
+    # Also load from environment variables (overrides .env)
+    for key in ["LINEAR_API_KEY", "GITHUB_TOKEN"]:
+        if key in os.environ:
+            env[key] = os.environ[key]
+
     return env
 
 
@@ -61,15 +75,17 @@ def linear_query(query: str, variables: dict = None) -> dict:
 def linear_issues(state: str = "open", limit: int = 50) -> dict:
     """
     Fetch Linear issues by state type.
-    
-    state: 'open' (unstarted + started), 'in_progress' (started),
-           'todo' (unstarted), 'done' (completed)
+
+    state: 'open' (backlog + unstarted + started), 'in_progress' (started),
+           'todo' (unstarted), 'done' (completed), 'all' (everything)
     """
     type_map = {
-        "open": '["unstarted", "started"]',
+        "open": '["backlog", "unstarted", "started"]',
         "in_progress": '["started"]',
         "todo": '["unstarted"]',
-        "done": '["completed"]',
+        "backlog": '["backlog"]',
+        "done": '["completed", "canceled"]',
+        "all": '["backlog", "unstarted", "started", "completed", "canceled"]',
     }
     types = type_map.get(state, type_map["open"])
 
@@ -95,7 +111,7 @@ def linear_issues(state: str = "open", limit: int = 50) -> dict:
     issues = result.get("data", {}).get("issues", {}).get("nodes", [])
 
     # Group by state type
-    by_type = {"unstarted": [], "started": [], "completed": [], "other": []}
+    by_type = {"backlog": [], "unstarted": [], "started": [], "completed": [], "canceled": [], "other": []}
     for i in issues:
         t = i.get("state", {}).get("type", "other")
         by_type.get(t, by_type["other"]).append(i)

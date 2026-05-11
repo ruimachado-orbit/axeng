@@ -274,22 +274,56 @@ def send_telegram(text: str):
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    print("🤖 Axeng Standup Brief — building...")
+    import argparse
 
-    print("  Fetching yesterday's commits...")
+    parser = argparse.ArgumentParser(
+        description="Generate daily standup brief for team",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s              Generate and print brief
+  %(prog)s --send       Generate and send to Telegram
+
+The brief includes:
+  • What shipped yesterday (commits)
+  • Who's blocked (unassigned Linear issues)
+  • Stale PRs (>48h waiting for review)
+  • Who's out of office today
+        """
+    )
+    parser.add_argument("--send", action="store_true",
+                       help="Send brief to Telegram (requires TELEGRAM_BOT_TOKEN)")
+    parser.add_argument("--quiet", "-q", action="store_true",
+                       help="Suppress progress messages")
+
+    args = parser.parse_args()
+
+    if not args.quiet:
+        print("🤖 Axeng Standup Brief — building...")
+
+    if not args.quiet:
+        print("  Fetching yesterday's commits...")
     commits = fetch_yesterday_commits()
 
-    print("  Checking for stale PRs...")
+    if not args.quiet:
+        print("  Checking for stale PRs...")
     stale = fetch_stale_pr_reviews()
 
-    print("  Checking Linear for blockers...")
+    if not args.quiet:
+        print("  Checking Linear for blockers...")
     linear = fetch_linear_issues()
 
-    print("  Checking who's OOO...")
+    if not args.quiet:
+        print("  Checking who's OOO...")
     ooo = fetch_ooo_today()
 
     brief = build_brief(commits, stale, linear, ooo)
     print("\n" + brief)
 
-    send_telegram(brief)
-    print("\n✅ Done.")
+    if args.send:
+        send_telegram(brief)
+        if not args.quiet:
+            print("\n✅ Sent to Telegram")
+
+    if not args.quiet:
+        print("\n✅ Done.")

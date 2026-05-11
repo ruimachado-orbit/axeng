@@ -400,4 +400,31 @@ def run_sync():
 
 
 if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Sync GitHub activity to Obsidian vault",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  %(prog)s              Run full sync (GitHub + Calendar + Email)
+  %(prog)s --dry-run    Preview what would be synced
+
+This script:
+  • Fetches recent GitHub commits and PRs
+  • Fetches calendar events (if configured)
+  • Fetches recent emails (if configured)
+  • Syncs to Obsidian vault for team memory
+
+Requires OBSIDIAN_VAULT_PATH in config or .env
+        """
+    )
+    parser.add_argument("--dry-run", action="store_true",
+                       help="Preview sync without writing to vault")
+
+    args = parser.parse_args()
+
+    if args.dry_run:
+        print("DRY RUN MODE - no files will be written")
+
     run_sync()

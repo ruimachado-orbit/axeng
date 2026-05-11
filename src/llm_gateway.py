@@ -273,15 +273,15 @@ def call(
     log.info(f"Calling {provider}/{model} at {url}")
 
     try:
-        import urllib.request
-        req = urllib.request.Request(
+        import requests as req_lib
+        resp = req_lib.post(
             url,
-            data=json.dumps(body).encode(),
+            json=body,
             headers=headers,
-            method="POST",
+            timeout=timeout
         )
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
-            data = json.loads(resp.read())
+        resp.raise_for_status()
+        data = resp.json()
 
         # Parse response
         if provider == "google":
@@ -290,7 +290,9 @@ def call(
             choices = data.get("choices", [])
             if not choices:
                 return {"ok": False, "error": f"No choices in response: {data}"}
-            text = choices[0]["message"].get("content", "")
+            message = choices[0]["message"]
+            # Handle reasoning models (content may be null, reasoning has the answer)
+            text = message.get("content") or message.get("reasoning", "")
 
         usage = data.get("usage", {})
         return {

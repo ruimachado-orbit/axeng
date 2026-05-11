@@ -348,11 +348,13 @@ suggest running specific axeng commands or checking the web UI at http://localho
                     temperature=0.7
                 )
 
-            if response:
-                console.print(response + "\n")
-                conversation_history.append({"role": "assistant", "content": response})
+            if response and response.get("ok"):
+                text = response.get("text", "")
+                console.print(text + "\n")
+                conversation_history.append({"role": "assistant", "content": text})
             else:
-                console.print("[red]Error: No response from LLM[/red]\n")
+                error = response.get("error", "Unknown error") if response else "No response"
+                console.print(f"[red]Error: {error}[/red]\n")
 
         except KeyboardInterrupt:
             console.print("\n\n[cyan]Goodbye! 👋[/cyan]\n")

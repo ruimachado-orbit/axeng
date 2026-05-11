@@ -624,6 +624,170 @@ def prs():
         console.print("\n[dim]Tip: Use 'axeng chat' and ask 'show my PRs'[/dim]")
 
 
+@app.command()
+def standup(send: bool = typer.Option(False, "--send", help="Send to Telegram/Slack")):
+    """Generate daily standup brief for team"""
+    console.print("[cyan]Generating standup brief...[/cyan]\n")
+
+    try:
+        # Use orchestrator to generate standup
+        axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+
+        # Load environment
+        env_file = Path(axeng_home) / ".env"
+        if env_file.exists():
+            for line in env_file.read_text().splitlines():
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key.strip()] = value.strip()
+
+        sys.path.insert(0, str(Path(__file__).parent))
+        import orchestrator
+
+        query = "Generate a standup brief: what shipped yesterday, who's blocked, PRs waiting for review, who's OOO today"
+        result = orchestrator.orchestrate(
+            goal=query,
+            auto_sync=False,
+            use_llm=True,
+            quiet=True
+        )
+
+        console.print(result)
+
+        if send:
+            console.print("\n[dim]Sending to Telegram...[/dim]")
+            # TODO: Implement Telegram send
+            console.print("[yellow]⚠[/yellow] Telegram send not yet implemented")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+
+
+@app.command()
+def prep(name: str = typer.Argument(None, help="Person's name or GitHub username")):
+    """Prepare for 1:1 meeting with team member"""
+    if not name:
+        console.print("[yellow]Usage:[/yellow] axeng prep [name]")
+        console.print("\nExample: axeng prep \"John Doe\"")
+        return
+
+    console.print(f"[cyan]Preparing 1:1 with {name}...[/cyan]\n")
+
+    try:
+        axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+
+        # Load environment
+        env_file = Path(axeng_home) / ".env"
+        if env_file.exists():
+            for line in env_file.read_text().splitlines():
+                line = line.strip()
+                if line and not line.startswith('#') and '=' in line:
+                    key, value = line.split('=', 1)
+                    os.environ[key.strip()] = value.strip()
+
+        sys.path.insert(0, str(Path(__file__).parent))
+        import orchestrator
+
+        query = f"Prepare a 1:1 meeting brief for {name}: their open issues, recent commits, pending PRs, last discussion notes, and suggested topics"
+        result = orchestrator.orchestrate(
+            goal=query,
+            auto_sync=False,
+            use_llm=True,
+            quiet=True
+        )
+
+        console.print(result)
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+
+
+@app.command()
+def offboard(
+    github_login: str = typer.Argument(..., help="GitHub username to offboard"),
+    dry_run: bool = typer.Option(True, "--dry-run/--execute", help="Preview changes (default) or execute")
+):
+    """Offboard a team member from GitHub and Linear"""
+    console.print(f"[cyan]Offboarding {github_login}...[/cyan]\n")
+
+    if dry_run:
+        console.print("[yellow]DRY RUN MODE[/yellow] - showing what would be removed\n")
+
+    try:
+        axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+
+        args = [
+            "python3",
+            str(Path(__file__).parent / "tools" / "offboarding.py"),
+            github_login
+        ]
+        if dry_run:
+            args.append("--dry-run")
+
+        result = subprocess.run(
+            args,
+            capture_output=True,
+            text=True,
+            env={**os.environ, "AXENG_HOME": axeng_home}
+        )
+
+        console.print(result.stdout)
+
+        if result.returncode != 0:
+            console.print(f"\n[red]Error:[/red] {result.stderr}")
+        elif dry_run:
+            console.print("\n[dim]Run with[/dim] [cyan]--execute[/cyan] [dim]to perform offboarding[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+
+
+@app.command()
+def team(name: str = typer.Argument(None, help="Team name to show details")):
+    """List teams or show team details"""
+    import yaml
+
+    axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+    config_file = Path(axeng_home) / "config" / "config.yaml"
+
+    if not config_file.exists():
+        console.print("[red]Error:[/red] config.yaml not found")
+        console.print(f"Expected at: {config_file}")
+        return
+
+    try:
+        with open(config_file) as f:
+            config = yaml.safe_load(f)
+
+        teams = config.get("linear", {}).get("projects", {})
+
+        if not name:
+            # List all teams
+            console.print("[bold]Teams:[/bold]\n")
+            for team_name, team_info in teams.items():
+                console.print(f"  • [cyan]{team_name}[/cyan]")
+                if team_info.get("owner"):
+                    console.print(f"    Owner: {team_info['owner']}")
+                if team_info.get("repos"):
+                    console.print(f"    Repos: {', '.join(team_info['repos'][:3])}")
+                console.print()
+        else:
+            # Show specific team
+            team_info = teams.get(name)
+            if not team_info:
+                console.print(f"[red]Error:[/red] Team '{name}' not found")
+                console.print(f"\nAvailable teams: {', '.join(teams.keys())}")
+                return
+
+            console.print(f"[bold cyan]{name}[/bold cyan]\n")
+            console.print(f"Owner: {team_info.get('owner', 'Not set')}")
+            console.print(f"Repos: {', '.join(team_info.get('repos', []))}")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+
+
 def main():
     """Main CLI entry point"""
     app()

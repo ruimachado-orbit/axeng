@@ -7,9 +7,11 @@ Fires at 07:30 Mon-Fri. Produces a focused brief for the standup:
   • Who's out of office today
   • PRs waiting >48h for review
 """
-import json, os, subprocess, sys
-from datetime import datetime, timedelta
+import json, os, re, subprocess, sys
+from collections import defaultdict
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 # ── Config paths ──────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent
@@ -21,7 +23,7 @@ sys.path.insert(1, str(TEAM_INTEL_DIR))  # team-intel second (fallback)
 
 # ── Import config (local first, then hermes fallback) ──────────────────────
 from config import (
-    GITHUB_ORGS, EX_MEMBERS, GITHUB_NAME_MAP,
+    GITHUB_ORGS, GITHUB_REPOS, EX_MEMBERS, GITHUB_NAME_MAP,
     LINEAR_PROJECT_IDS, LINEAR_GITHUB_MAP,
     RECIPIENTS, email_from,
 )
@@ -36,82 +38,121 @@ def load_env() -> dict:
                 env[k] = v
     return env
 
-# ── GitHub: commits from yesterday ──────────────────────────────────────────
+# ── GitHub: shipped work from yesterday ──────────────────────────────────────
+def yesterday_window():
+    """Return yesterday's Lisbon date and UTC API bounds for the full local day."""
+    tz = ZoneInfo("Europe/Lisbon")
+    today = datetime.now(tz).date()
+    yday = today - timedelta(days=1)
+    start_local = datetime(yday.year, yday.month, yday.day, tzinfo=tz)
+    end_local = start_local + timedelta(days=1)
+    return (
+        yday.isoformat(),
+        start_local.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+        end_local.astimezone(timezone.utc).isoformat().replace("+00:00", "Z"),
+    )
+
+
+def gh_json(args: list, timeout: int = 45):
+    raw = subprocess.check_output(["gh", "api", *args], stderr=subprocess.DEVNULL, timeout=timeout)
+    return json.loads(raw.decode() or "{}")
+
+
+def fetch_repos() -> list:
+    """Resolve configured GitHub orgs/users to full repo names."""
+    repos = list(GITHUB_REPOS or [])
+    for owner in GITHUB_ORGS:
+        for endpoint in (f"orgs/{owner}/repos", f"users/{owner}/repos"):
+            try:
+                data = gh_json(["-X", "GET", endpoint, "--paginate", "-f", "per_page=100"], timeout=30)
+                repos.extend(r.get("full_name") for r in data if r.get("full_name"))
+                break
+            except Exception:
+                continue
+    return sorted(set(r for r in repos if r))
+
+
+def fetch_merged_prs_yesterday() -> list:
+    """Fetch PRs merged yesterday. This is the primary source for 'what shipped'."""
+    yday, _, _ = yesterday_window()
+    shipped = []
+    seen = set()
+
+    # Search per owner first: faster than per-repo and includes private repos with gh auth.
+    for owner in GITHUB_ORGS:
+        for qualifier in (f"org:{owner}", f"user:{owner}"):
+            query = f"{qualifier} is:pr is:merged merged:{yday} archived:false"
+            try:
+                data = gh_json(["-X", "GET", "search/issues", "-f", f"q={query}", "-f", "per_page=100"], timeout=45)
+                items = data.get("items", []) if isinstance(data, dict) else []
+                if items:
+                    for pr in items:
+                        repo = pr.get("repository_url", "").split("/repos/")[-1]
+                        key = (repo, pr.get("number"))
+                        author_login = (pr.get("user") or {}).get("login", "")
+                        if key in seen or author_login in EX_MEMBERS:
+                            continue
+                        seen.add(key)
+                        shipped.append({
+                            "repo": repo,
+                            "number": pr.get("number"),
+                            "title": pr.get("title", ""),
+                            "author": GITHUB_NAME_MAP.get(author_login, author_login),
+                            "url": pr.get("html_url", ""),
+                            "closed_at": pr.get("closed_at", ""),
+                        })
+                    break
+            except Exception:
+                continue
+    return sorted(shipped, key=lambda p: (p.get("repo", ""), p.get("number") or 0))
+
+
 def fetch_yesterday_commits() -> list:
-    """Get commits from all orgs for the last full day (yesterday)."""
-    yesterday = datetime.now() - timedelta(days=1)
-    cutoff = yesterday.strftime("%Y-%m-%dT00:00:00Z")
+    """Get direct commits from yesterday as fallback/extra signal for shipped work."""
+    _, since, until = yesterday_window()
     commits = []
 
-    for org in GITHUB_ORGS:
+    for repo in fetch_repos():
         try:
-            out = subprocess.check_output(
-                f'gh api orgs/{org}/repos --paginate --jq ".[].nameWithOwner"',
-                shell=True, stderr=subprocess.DEVNULL, timeout=30
-            )
-            repos = [r.strip() for r in out.decode().strip().splitlines() if r.strip()]
+            data = gh_json(["-X", "GET", f"repos/{repo}/commits", "--paginate", "-f", f"since={since}", "-f", f"until={until}", "-f", "per_page=100"], timeout=45)
+            for c in data if isinstance(data, list) else []:
+                author_login = (c.get("author") or {}).get("login") or c["commit"]["author"].get("name", "")
+                if author_login in EX_MEMBERS:
+                    continue
+                commits.append({
+                    "sha": c["sha"][:7],
+                    "message": c["commit"]["message"].split("\n")[0],
+                    "date": c["commit"]["author"].get("date", ""),
+                    "author": GITHUB_NAME_MAP.get(author_login, author_login),
+                    "repo": repo,
+                })
         except Exception:
-            continue
-
-        for repo in repos:
-            try:
-                raw = subprocess.check_output(
-                    f'gh api repos/{repo}/commits --paginate -f since="{cutoff}"',
-                    shell=True, stderr=subprocess.DEVNULL, timeout=60
-                )
-                for c in json.loads(raw):
-                    author_login = (c.get("author") or {}).get("login", c["commit"]["author"]["name"])
-                    if author_login in EX_MEMBERS:
-                        continue
-                    commits.append({
-                        "sha": c["sha"][:7],
-                        "message": c["commit"]["message"].split("\n")[0],
-                        "date": c["commit"]["author"]["date"],
-                        "author": GITHUB_NAME_MAP.get(author_login, author_login),
-                        "repo": repo,
-                    })
-            except Exception:
-                pass
+            pass
     return commits
 
 # ── GitHub: PRs waiting >48h ─────────────────────────────────────────────────
 def fetch_stale_pr_reviews() -> list:
-    """PRs merged in last 7 days where review requested >48h ago and still no review."""
+    """Open PRs waiting >48h with requested reviewers still pending."""
     stale = []
-    cutoff = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d")
 
-    for org in GITHUB_ORGS:
+    for repo in fetch_repos():
         try:
-            out = subprocess.check_output(
-                f'gh api orgs/{org}/repos --paginate --jq ".[].nameWithOwner"',
-                shell=True, stderr=subprocess.DEVNULL, timeout=30
-            )
-            repos = [r.strip() for r in out.decode().strip().splitlines() if r.strip()]
+            prs = gh_json(["-X", "GET", f"repos/{repo}/pulls", "--paginate", "-f", "state=open", "-f", "per_page=50"], timeout=30)
+            for pr in prs if isinstance(prs, list) else []:
+                created = datetime.fromisoformat(pr["created_at"].replace("Z", "+00:00"))
+                age_hours = (datetime.now(timezone.utc) - created).total_seconds() / 3600
+                reviews = pr.get("requested_reviewers", [])
+                if age_hours > 48 and reviews:
+                    stale.append({
+                        "repo": repo,
+                        "number": pr["number"],
+                        "title": pr["title"],
+                        "author": GITHUB_NAME_MAP.get(pr["user"]["login"], pr["user"]["login"]),
+                        "age_hours": int(age_hours),
+                        "reviewers": [GITHUB_NAME_MAP.get(r["login"], r["login"]) for r in reviews],
+                    })
         except Exception:
-            continue
-
-        for repo in repos:
-            try:
-                raw = subprocess.check_output(
-                    f'gh api repos/{repo}/pulls?state=open&per_page=50 --paginate',
-                    shell=True, stderr=subprocess.DEVNULL, timeout=30
-                )
-                prs = json.loads(raw)
-                for pr in prs:
-                    created = datetime.fromisoformat(pr["created_at"].replace("Z", "+00:00"))
-                    age_hours = (datetime.now().astimezone() - created).total_seconds() / 3600
-                    reviews = pr.get("requested_reviewers", [])
-                    if age_hours > 48 and reviews:
-                        stale.append({
-                            "repo": repo,
-                            "number": pr["number"],
-                            "title": pr["title"],
-                            "author": pr["user"]["login"],
-                            "age_hours": int(age_hours),
-                            "reviewers": [r["login"] for r in reviews],
-                        })
-            except Exception:
-                pass
+            pass
     return stale
 
 # ── Linear: stale/blocked issues ─────────────────────────────────────────────
@@ -200,26 +241,88 @@ def fetch_ooo_today() -> list:
         return []
 
 # ── Build the brief ─────────────────────────────────────────────────────────
-def build_brief(yesterday_commits, stale_prs, linear, ooo) -> str:
+def clean_work_title(title: str) -> str:
+    """Turn conventional commit/PR titles into readable achievement snippets."""
+    title = re.sub(r"^\s*(feat|fix|refactor|chore|docs|test|perf|ci|build|style)(\([^)]+\))?:\s*", "", title, flags=re.I)
+    title = re.sub(r"^\s*(merge pull request|merge branch)\b.*", "merge/integration work", title, flags=re.I)
+    title = re.sub(r"\s+", " ", title).strip(" -—")
+    return title[:85] or "shipped work"
+
+
+def build_developer_achievements(shipped_prs, yesterday_commits) -> list:
+    """Deterministic per-developer shipped summary; no LLM in scheduled path."""
+    by_author = defaultdict(lambda: {"prs": [], "commits": [], "repos": set()})
+    for pr in shipped_prs:
+        author = pr.get("author") or "Unknown"
+        by_author[author]["prs"].append(pr)
+        if pr.get("repo"):
+            by_author[author]["repos"].add(pr["repo"].split("/")[-1])
+    for c in yesterday_commits:
+        author = c.get("author") or "Unknown"
+        by_author[author]["commits"].append(c)
+        if c.get("repo"):
+            by_author[author]["repos"].add(c["repo"].split("/")[-1])
+
+    lines = []
+    for author, data in sorted(by_author.items(), key=lambda x: (-(len(x[1]["prs"])), -(len(x[1]["commits"])), x[0])):
+        snippets = []
+        for pr in data["prs"][:3]:
+            snippets.append(clean_work_title(pr.get("title", "")))
+        if not snippets:
+            for c in data["commits"][:3]:
+                snippets.append(clean_work_title(c.get("message", "")))
+        repo_text = ", ".join(sorted(data["repos"])[:3])
+        more_repos = f" +{len(data['repos'])-3} repos" if len(data["repos"]) > 3 else ""
+        counts = []
+        if data["prs"]:
+            counts.append(f"{len(data['prs'])} PR" + ("s" if len(data["prs"]) != 1 else ""))
+        if data["commits"]:
+            counts.append(f"{len(data['commits'])} commit" + ("s" if len(data["commits"]) != 1 else ""))
+        summary = "; ".join(snippets[:3])
+        lines.append(f"  • **{author}** ({', '.join(counts)} · {repo_text}{more_repos}): {summary}")
+    return lines
+
+
+def build_brief(shipped_prs, yesterday_commits, stale_prs, linear, ooo) -> str:
     today = datetime.now().strftime("%-d %b %Y")
     lines = []
     lines.append(f"📋 Standup Brief · {today}\n")
 
     # ── What shipped yesterday ──
-    if yesterday_commits:
+    lines.append("✅ **What shipped yesterday**")
+    if shipped_prs:
+        by_repo = {}
+        for pr in shipped_prs:
+            by_repo.setdefault(pr["repo"], []).append(pr)
+        for repo, prs in sorted(by_repo.items(), key=lambda x: -len(x[1])):
+            examples = "; ".join(
+                f"#{p['number']} {p['title'][:55]} — {p['author']}"
+                for p in prs[:3]
+            )
+            suffix = f" (+{len(prs)-3} more)" if len(prs) > 3 else ""
+            lines.append(f"  • **{repo}** ({len(prs)} merged PRs): {examples}{suffix}")
+        if yesterday_commits:
+            lines.append(f"  ↳ GitHub commit signal: {len(yesterday_commits)} commits across monitored repos")
+    elif yesterday_commits:
         by_author = {}
         for c in yesterday_commits:
             author = c["author"]
             by_author.setdefault(author, []).append(c)
-        lines.append("✅ **What shipped yesterday**")
         for author, commits in sorted(by_author.items(), key=lambda x: -len(x[1])):
-            msgs = ", ".join(f"`{c['sha']}` {c['message'][:50]}" for c in commits[:2])
-            lines.append(f"  • **{author}** ({len(commits)} commits): {msgs}")
+            msgs = ", ".join(f"`{c['repo'].split('/')[-1]}@{c['sha']}` {c['message'][:45]}" for c in commits[:2])
+            lines.append(f"  • **{author}** ({len(commits)} direct commits): {msgs}")
     else:
-        lines.append("✅ **What shipped yesterday** — nothing recorded")
+        lines.append("  • Nothing recorded in GitHub")
+
+    achievement_lines = build_developer_achievements(shipped_prs, yesterday_commits)
+    if achievement_lines:
+        lines.append("\n👤 **Per developer achievements**")
+        lines.extend(achievement_lines[:8])
+        if len(achievement_lines) > 8:
+            lines.append(f"  • +{len(achievement_lines)-8} more developers with GitHub activity")
 
     # ── Blocked issues ──
-    if linear["unassigned"]:
+    if linear.get("unassigned"):
         lines.append("\n🚧 **Unassigned issues** (need owner)")
         for issue in linear["unassigned"][:5]:
             prio_tag = {0: "🔴", 1: "🔴", 2: "🟠", 3: "🟡"}.get(issue["priority"], "⚪")
@@ -227,7 +330,7 @@ def build_brief(yesterday_commits, stale_prs, linear, ooo) -> str:
     else:
         lines.append("\n🚧 **Unassigned issues** — none")
 
-    if linear["stale_projects"]:
+    if linear.get("stale_projects"):
         lines.append("\n🕐 **Quiet projects** (no update in 3+ days)")
         for p in linear["stale_projects"]:
             lines.append(f"  • {p['project']} — last update: {p['last_update']}")
@@ -274,56 +377,25 @@ def send_telegram(text: str):
 
 # ── Main ─────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
-    import argparse
+    print("🤖 Axeng Standup Brief — building...")
 
-    parser = argparse.ArgumentParser(
-        description="Generate daily standup brief for team",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  %(prog)s              Generate and print brief
-  %(prog)s --send       Generate and send to Telegram
+    print("  Fetching yesterday's merged PRs...")
+    shipped = fetch_merged_prs_yesterday()
 
-The brief includes:
-  • What shipped yesterday (commits)
-  • Who's blocked (unassigned Linear issues)
-  • Stale PRs (>48h waiting for review)
-  • Who's out of office today
-        """
-    )
-    parser.add_argument("--send", action="store_true",
-                       help="Send brief to Telegram (requires TELEGRAM_BOT_TOKEN)")
-    parser.add_argument("--quiet", "-q", action="store_true",
-                       help="Suppress progress messages")
-
-    args = parser.parse_args()
-
-    if not args.quiet:
-        print("🤖 Axeng Standup Brief — building...")
-
-    if not args.quiet:
-        print("  Fetching yesterday's commits...")
+    print("  Fetching yesterday's direct commits...")
     commits = fetch_yesterday_commits()
 
-    if not args.quiet:
-        print("  Checking for stale PRs...")
+    print("  Checking for stale PRs...")
     stale = fetch_stale_pr_reviews()
 
-    if not args.quiet:
-        print("  Checking Linear for blockers...")
+    print("  Checking Linear for blockers...")
     linear = fetch_linear_issues()
 
-    if not args.quiet:
-        print("  Checking who's OOO...")
+    print("  Checking who's OOO...")
     ooo = fetch_ooo_today()
 
-    brief = build_brief(commits, stale, linear, ooo)
+    brief = build_brief(shipped, commits, stale, linear, ooo)
     print("\n" + brief)
 
-    if args.send:
-        send_telegram(brief)
-        if not args.quiet:
-            print("\n✅ Sent to Telegram")
-
-    if not args.quiet:
-        print("\n✅ Done.")
+    send_telegram(brief)
+    print("\n✅ Done.")

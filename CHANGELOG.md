@@ -1,5 +1,21 @@
 # Axeng Changelog
 
+## [2.2.2] - 2026-05-12
+
+### Added
+- **Daily standup GitHub shipped summaries**
+  - "What shipped yesterday" now uses merged GitHub PRs as the primary signal
+  - Uses the full previous Europe/Lisbon calendar day instead of a rolling 24h window
+  - Includes direct commits as an additional/fallback signal
+
+- **Per-developer achievement summaries**
+  - Groups shipped PRs and commits by developer
+  - Summarizes achievements deterministically from PR and commit titles
+  - Shows repos touched and compact PR/commit counts for Telegram standup briefs
+
+### Fixed
+- **Stale PR review logic** now focuses on open PRs waiting on requested reviewers instead of recently merged PRs.
+
 ## [2.2.0] - 2026-05-11
 
 ### Added

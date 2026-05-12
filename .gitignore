@@ -53,6 +53,13 @@ reports/*.html
 ui/nextjs/out-website/
 ui/nextjs/.deploy/
 
+# Website (marketing site)
+website/node_modules/
+website/.next/
+website/out/
+website/out-website/
+website/.deploy/
+
 # Obsidian vault (local data)
 vault/
 *.md.archived

@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "api": "python3 api_server.py"
+    "api": "python3 api_server.py",
+    "export:website": "./scripts/export-website-static.sh",
+    "deploy:aws": "./scripts/deploy-aws-cloudfront.sh"
   },
   "dependencies": {
     "@base-ui/react": "^1.4.1",

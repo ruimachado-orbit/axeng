@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import Image from 'next/image'
 import {
   Activity,
   ArrowRight,
@@ -125,17 +126,12 @@ export default function AxengWebsitePage() {
             ))}
           </nav>
 
-          <div className="flex items-center gap-3">
-            <a href="http://localhost:3000" className="hidden text-sm text-slate-400 transition hover:text-white sm:block">
-              Open app
-            </a>
-            <a
-              href="https://github.com/ruimachado-orbit/axeng"
-              className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-4 py-2 text-sm font-medium text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.14)] transition hover:bg-cyan-300/16"
-            >
-              View GitHub
-            </a>
-          </div>
+          <a
+            href="mailto:hello@maiolabs.ai"
+            className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-5 py-2.5 text-sm font-medium text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.14)] transition hover:bg-cyan-300/16"
+          >
+            Contact us
+          </a>
         </div>
       </header>
 
@@ -201,50 +197,60 @@ export default function AxengWebsitePage() {
       <section className="mx-auto max-w-7xl px-5 py-16 sm:px-8">
         <div className="text-center">
           <p className="text-sm font-medium uppercase tracking-[0.18em] text-slate-500">Ships with integrations for</p>
-          <div className="mt-10 grid grid-cols-2 gap-6 sm:grid-cols-3 lg:grid-cols-6">
-            <div className="group flex flex-col items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.02] p-5 transition hover:border-cyan-300/20 hover:bg-white/[0.04]">
-              <svg className="h-10 w-10 text-slate-400 transition group-hover:scale-110 group-hover:text-slate-200" viewBox="0 0 24 24" fill="currentColor">
+          <div className="mt-10 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-7">
+            <div className="group flex flex-col items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] p-5 transition hover:border-white/16 hover:bg-white/[0.04]">
+              <svg className="h-10 w-10 text-slate-400 transition group-hover:scale-110 group-hover:text-white" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
               </svg>
               <span className="text-xs font-medium text-slate-400 transition group-hover:text-slate-200">GitHub</span>
+              <p className="mt-1 text-center text-[10px] leading-tight text-slate-500">Code delivery signal</p>
             </div>
-            <div className="group flex flex-col items-center gap-3 rounded-2xl border border-white/8 bg-white/[0.02] p-5 transition hover:border-purple-300/20 hover:bg-white/[0.04]">
-              <svg className="h-10 w-10 text-slate-400 transition group-hover:scale-110 group-hover:text-purple-300" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3z"/>
+            <div className="group flex flex-col items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] p-5 transition hover:border-purple-300/20 hover:bg-white/[0.04]">
+              <svg className="h-10 w-10 text-slate-400 transition group-hover:scale-110 group-hover:text-purple-300" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M1.22541 61.5228c-.2225-.9485.90748-1.5459 1.59638-.857L39.3342 97.1782c.6889.6889.0915 1.8189-.857 1.5964C20.0515 94.4522 5.54779 79.9485 1.22541 61.5228ZM.00189135 46.8891c-.01764375.2833.08887215.5599.28957165.7606L52.3503 99.7085c.2007.2007.4773.3075.7606.2896 2.3692-.1476 4.6938-.46 6.9624-.9259.7645-.157 1.0301-1.0963.4782-1.6481L2.57595 39.4485c-.55186-.5519-1.49117-.2863-1.648174.4782-.465915 2.2686-.77832 4.5932-.92588465 6.9624ZM4.21093 29.7054c-.16649.3738-.08169.8106.20765 1.1l64.77602 64.776c.2894.2894.7262.3742 1.1.2077 1.7861-.7956 3.5171-1.6927 5.1855-2.684.5521-.328.6373-1.0867.1832-1.5407L8.43566 24.3367c-.45409-.4541-1.21271-.3689-1.54074.1832-.99132 1.6684-1.88843 3.3994-2.68399 5.1855ZM12.6587 16.704c-.3701.5337-.2654 1.2582.2336 1.7572l68.3409 68.3409c.499.499 1.2235.6037 1.7572.2336 1.3447-.932 2.6414-1.9406 3.8832-3.0188.5689-.4941.5973-1.3542.0571-1.8944L19.5407 14.7452c-.5402-.5402-1.4003-.5118-1.8944.0571-1.07824 1.2418-2.08685 2.5385-3.01884 3.8832ZM24.2841 7.69947c-.5958.72571-.493 1.79243.2279 2.51333l65.2659 65.2659c.7209.7209 1.7876.8237 2.5133.2279 1.0273-.8437 2.0109-1.7323 2.9467-2.6621.6294-.6254.6294-1.64.0065-2.2629L27.1802 4.73739c-.6229-.62291-1.6375-.62291-2.2629.00651-.9298.93578-1.8184 1.91942-2.6621 2.94672ZM39.2549 2.5792c-.7987.8757-.7351 2.2428.1411 3.0491l57.02 54.8914c.8062.7762 2.0908.8397 2.8834.1428 1.7169-1.5092 3.338-3.1366 4.8427-4.8712.6636-.7649.5999-1.9168-.1416-2.5784L45.795 2.41737c-.7416-.66161-1.8751-.72534-2.5388-.14149-1.7453 1.53645-3.383 3.17755-4.9013 4.91552Z" fill="currentColor"/>
               </svg>
-              <span className="text-sm font-medium text-slate-300">Linear</span>
+              <span className="text-xs font-medium text-slate-400 transition group-hover:text-slate-200">Linear</span>
+              <p className="mt-1 text-center text-[10px] leading-tight text-slate-500">Issue tracking & sprints</p>
             </div>
-            <div className="flex items-center gap-2">
-              <svg className="h-8 w-8" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
+            <div className="group flex flex-col items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] p-5 transition hover:border-blue-300/20 hover:bg-white/[0.04]">
+              <svg className="h-10 w-10 text-slate-400 transition group-hover:scale-110 group-hover:text-blue-300" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
               </svg>
-              <span className="text-sm font-medium text-slate-300">Google Workspace</span>
+              <span className="text-xs font-medium text-slate-400 transition group-hover:text-slate-200">Google</span>
+              <p className="mt-1 text-center text-[10px] leading-tight text-slate-500">Calendar & meetings</p>
             </div>
-            <div className="flex items-center gap-2">
-              <svg className="h-8 w-8" viewBox="0 0 24 24" fill="currentColor">
+            <div className="group flex flex-col items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] p-5 transition hover:border-pink-300/20 hover:bg-white/[0.04]">
+              <svg className="h-10 w-10 text-slate-400 transition group-hover:scale-110 group-hover:text-pink-300" viewBox="0 0 24 24" fill="currentColor">
                 <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>
               </svg>
-              <span className="text-sm font-medium text-slate-300">Slack</span>
+              <span className="text-xs font-medium text-slate-400 transition group-hover:text-slate-200">Slack</span>
+              <p className="mt-1 text-center text-[10px] leading-tight text-slate-500">Team communication</p>
             </div>
-            <div className="flex items-center gap-2">
-              <svg className="h-8 w-8" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M21.198 10.425c-.237-.972-.906-1.636-1.88-1.873.02-.083.039-.167.055-.251.325-1.725-.28-3.445-1.57-4.47l-.323-.255-.256.322c-.604.76-.982 1.68-1.075 2.638a3.888 3.888 0 0 0 .315 2.011c-.485.282-1.019.486-1.586.602-1.14.233-2.321.164-3.41-.2a5.615 5.615 0 0 1-2.415-1.522c-1.263-1.396-1.669-3.23-1.084-4.907l.147-.421-.407-.186C5.83 1.35 4.105 1.515 2.82 2.653 1.535 3.79.948 5.51 1.2 7.207c.254 1.697 1.383 3.101 2.987 3.723a3.757 3.757 0 0 0 1.445.294c.23 0 .459-.022.685-.066.02-.004.04-.007.059-.01.018.118.042.235.074.35.237.972.906 1.636 1.88 1.873-.02.084-.039.168-.055.252-.325 1.725.28 3.444 1.57 4.469l.323.255.256-.322c.604-.76.982-1.68 1.075-2.638a3.888 3.888 0 0 0-.315-2.011c.485-.282 1.019-.486 1.586-.602 1.14-.233 2.321-.164 3.41.2a5.615 5.615 0 0 1 2.415 1.522c1.263 1.396 1.669 3.23 1.084 4.907l-.147.421.407.186c1.879.857 3.604.692 4.889-.446 1.285-1.137 1.872-2.857 1.62-4.554z"/>
+            <div className="group flex flex-col items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] p-5 transition hover:border-cyan-300/20 hover:bg-white/[0.04]">
+              <svg className="h-10 w-10 text-slate-400 transition group-hover:scale-110 group-hover:text-cyan-300" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm5.894 8.221l-1.97 9.28c-.145.658-.537.818-1.084.508l-3-2.21-1.446 1.394c-.14.18-.357.295-.6.295-.002 0-.003 0-.005 0l.213-3.054 5.56-5.022c.24-.213-.054-.334-.373-.121l-6.869 4.326-2.96-.924c-.64-.203-.658-.64.135-.954l11.566-4.458c.538-.196 1.006.128.832.941z"/>
               </svg>
-              <span className="text-sm font-medium text-slate-300">Telegram</span>
+              <span className="text-xs font-medium text-slate-400 transition group-hover:text-slate-200">Telegram</span>
+              <p className="mt-1 text-center text-[10px] leading-tight text-slate-500">Alert delivery</p>
             </div>
-            <div className="flex items-center gap-2">
-              <svg className="h-8 w-8" viewBox="0 0 24 24" fill="currentColor">
-                <path d="M12 0C5.373 0 0 5.373 0 12s5.373 12 12 12 12-5.373 12-12S18.627 0 12 0zm0 22C6.486 22 2 17.514 2 12S6.486 2 12 2s10 4.486 10 10-4.486 10-10 10zm1-17h-2v2H9v2h2v2h2v-2h2V7h-2V5z"/>
-              </svg>
-              <span className="text-sm font-medium text-slate-300">Obsidian</span>
+            <div className="group flex flex-col items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] p-5 transition hover:border-purple-400/20 hover:bg-white/[0.04]">
+              <div className="h-10 w-10 transition group-hover:scale-110">
+                <Image src="/logos/obsidian.png" alt="Obsidian" width={40} height={40} className="h-10 w-10 object-contain opacity-60 grayscale transition group-hover:opacity-100 group-hover:grayscale-0" />
+              </div>
+              <span className="text-xs font-medium text-slate-400 transition group-hover:text-slate-200">Obsidian</span>
+              <p className="mt-1 text-center text-[10px] leading-tight text-slate-500">Knowledge base</p>
+            </div>
+            <div className="group flex flex-col items-center gap-2 rounded-2xl border border-white/8 bg-white/[0.02] p-5 transition hover:border-lime-400/20 hover:bg-white/[0.04]">
+              <div className="h-10 w-10 transition group-hover:scale-110">
+                <Image src="/logos/granola.png" alt="Granola" width={40} height={40} className="h-10 w-10 object-contain opacity-60 grayscale transition group-hover:opacity-100 group-hover:grayscale-0" />
+              </div>
+              <span className="text-xs font-medium text-slate-400 transition group-hover:text-slate-200">Granola</span>
+              <p className="mt-1 text-center text-[10px] leading-tight text-slate-500">Meeting transcripts</p>
             </div>
           </div>
-          <p className="mt-6 text-sm text-slate-500">
+          <p className="mt-8 text-sm text-slate-500">
             Need more integrations?{' '}
-            <a href="https://maiolabs.ai" target="_blank" rel="noopener noreferrer" className="text-cyan-300 transition hover:text-cyan-200">
+            <a href="https://maiolabs.ai" target="_blank" rel="noopener noreferrer" className="font-medium text-cyan-300 transition hover:text-cyan-200">
               Maio Labs
             </a>{' '}
             can build custom connectors for your stack.
@@ -297,6 +303,101 @@ export default function AxengWebsitePage() {
               </div>
             )
           })}
+        </div>
+      </section>
+
+      <section className="mx-auto max-w-7xl px-5 py-24 sm:px-8">
+        <div className="text-center">
+          <p className="text-sm font-semibold uppercase tracking-[0.24em] text-cyan-200">Data Orchestration</p>
+          <h2 className="mt-4 text-4xl font-semibold tracking-[-0.04em] text-white sm:text-5xl">
+            Intelligence flows through your stack
+          </h2>
+          <p className="mx-auto mt-5 max-w-2xl leading-8 text-slate-300">
+            Axeng continuously observes, correlates, and synthesizes signals from across your engineering operations.
+          </p>
+        </div>
+
+        <div className="relative mx-auto mt-16 max-w-5xl">
+          <div className="grid gap-8 md:grid-cols-3">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur">
+              <div className="mb-4 inline-flex items-center justify-center rounded-xl bg-cyan-300/10 p-3">
+                <Activity className="h-6 w-6 text-cyan-300" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">Sources</h3>
+              <ul className="mt-4 space-y-2 text-sm text-slate-400">
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-cyan-300"></span>
+                  GitHub commits & PRs
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-purple-300"></span>
+                  Linear issues & cycles
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-blue-300"></span>
+                  Calendar & meetings
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-pink-300"></span>
+                  Team chat & notes
+                </li>
+              </ul>
+            </div>
+
+            <div className="rounded-2xl border border-cyan-300/20 bg-gradient-to-br from-cyan-500/10 to-teal-500/5 p-6 shadow-[0_0_50px_rgba(34,211,238,0.15)]">
+              <div className="mb-4 inline-flex items-center justify-center rounded-xl bg-cyan-300/20 p-3">
+                <Radar className="h-6 w-6 text-cyan-200" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">Axeng Core</h3>
+              <ul className="mt-4 space-y-2 text-sm text-slate-300">
+                <li className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-cyan-300" />
+                  Signal correlation
+                </li>
+                <li className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-cyan-300" />
+                  Pattern recognition
+                </li>
+                <li className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-cyan-300" />
+                  Context synthesis
+                </li>
+                <li className="flex items-center gap-2">
+                  <Zap className="h-4 w-4 text-cyan-300" />
+                  Action generation
+                </li>
+              </ul>
+            </div>
+
+            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 backdrop-blur">
+              <div className="mb-4 inline-flex items-center justify-center rounded-xl bg-amber-300/10 p-3">
+                <MessageSquareText className="h-6 w-6 text-amber-300" />
+              </div>
+              <h3 className="text-lg font-semibold text-white">Outputs</h3>
+              <ul className="mt-4 space-y-2 text-sm text-slate-400">
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-300"></span>
+                  Daily standups
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-300"></span>
+                  1:1 pre-reads
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-300"></span>
+                  Risk alerts
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-1.5 w-1.5 rounded-full bg-amber-300"></span>
+                  Team reports
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div className="absolute left-0 right-0 top-1/2 -z-10 flex -translate-y-1/2 items-center justify-center">
+            <div className="h-px w-full bg-gradient-to-r from-transparent via-cyan-300/30 to-transparent"></div>
+          </div>
         </div>
       </section>
 
@@ -353,12 +454,9 @@ export default function AxengWebsitePage() {
           <p className="mx-auto mt-5 max-w-2xl leading-8 text-slate-300">
             Install locally, connect the sources your team already uses, and let Axeng turn operational noise into a daily execution rhythm.
           </p>
-          <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-            <a href="https://github.com/ruimachado-orbit/axeng" className="inline-flex items-center justify-center gap-2 rounded-full bg-cyan-200 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-100">
-              Get Axeng <ChevronRight className="h-4 w-4" />
-            </a>
-            <a href="http://localhost:3000" className="inline-flex items-center justify-center gap-2 rounded-full border border-white/12 px-6 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/[0.06]">
-              Open dashboard
+          <div className="mt-8 flex justify-center">
+            <a href="mailto:hello@maiolabs.ai" className="inline-flex items-center justify-center gap-2 rounded-full bg-cyan-200 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-100">
+              Contact us <ChevronRight className="h-4 w-4" />
             </a>
           </div>
         </div>
@@ -367,12 +465,9 @@ export default function AxengWebsitePage() {
       <footer className="border-t border-white/10 px-5 py-10 sm:px-8">
         <div className="mx-auto flex max-w-7xl flex-col gap-8 md:flex-row md:items-center md:justify-between">
           <div>
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 text-white">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-cyan-300/10 text-cyan-100">A</div>
-              <span className="font-semibold text-white">Axeng</span>
-              <a href="https://maiolabs.ai" target="_blank" rel="noopener noreferrer" className="text-sm text-slate-500 transition hover:text-slate-400">
-                by Maio Labs
-              </a>
+              <span className="font-semibold">Axeng</span>
             </div>
             <p className="mt-3 max-w-md text-sm leading-6 text-slate-500">
               Autonomous engineering intelligence for leaders who need evidence, rhythm, and execution — not another dashboard to babysit.

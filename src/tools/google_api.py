@@ -15,15 +15,15 @@ from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-# Scopes for Calendar and Gmail read access
+# Scopes for Calendar and Gmail access
 SCOPES = [
-    'https://www.googleapis.com/auth/calendar.readonly',
+    'https://www.googleapis.com/auth/calendar',
     'https://www.googleapis.com/auth/gmail.readonly'
 ]
 
 # Get paths from environment or use defaults
-CLIENT_SECRET_PATH = Path(os.getenv('GOOGLE_CLIENT_SECRET', '~/.hermes/secrets/google_client_secret.json')).expanduser()
-TOKEN_PATH = Path(os.getenv('GOOGLE_TOKEN_PATH', '~/.hermes/secrets/google_token.json')).expanduser()
+CLIENT_SECRET_PATH = Path(os.getenv('GOOGLE_CLIENT_SECRET', '~/.hermes/google_client_secret.json')).expanduser()
+TOKEN_PATH = Path(os.getenv('GOOGLE_TOKEN_PATH', '~/.hermes/google_token.json')).expanduser()
 
 
 def get_credentials():
@@ -128,6 +128,71 @@ def list_gmail_messages(max_results=10, query=''):
         })
 
     return detailed_messages
+
+
+def create_ooo_event(name: str, start_date: str, end_date: str, note: str = "") -> dict:
+    """
+    Create an Out-of-Office (OOO) event on Google Calendar.
+
+    Args:
+        name: Person's name (used in event title)
+        start_date: Start date in YYYY-MM-DD format
+        end_date: End date in YYYY-MM-DD format (exclusive — last day of vacation)
+        note: Optional note (appended to description)
+
+    Returns:
+        dict with event id and url
+    """
+    creds = get_credentials()
+    service = build('calendar', 'v3', credentials=creds)
+
+    # Build event title
+    title = f"OOO — {name}"
+
+    # Build description
+    description = f"Out of office: {name}"
+    if note:
+        description += f"\n\n{note}"
+
+    # Google Calendar OOO = special "outOfOffice" transparency or all-day event
+    # We create an all-day "focusTime" event marked as OOO, or use the
+    # simpler approach: all-day "busy" event on primary calendar
+    # Best approach: create all-day event with transparency='transparent'
+    # (shows as OOO when Autoocado is enabled, or just blocks calendar)
+    event = {
+        'summary': title,
+        'description': description,
+        'start': {
+            'date': start_date,
+        },
+        'end': {
+            # 'date' is exclusive in all-day events, so add 1 day for full coverage
+            'date': add_one_day(end_date),
+        },
+        'visibility': 'public',
+        'colorId': '11',  # Light yellow — visually distinct for OOO
+    }
+
+    created = service.events().insert(
+        calendarId='primary',
+        body=event,
+        sendNotifications=False,
+    ).execute()
+
+    return {
+        'id': created.get('id'),
+        'url': created.get('htmlLink'),
+        'summary': created.get('summary'),
+        'start': created.get('start', {}).get('date'),
+        'end': created.get('end', {}).get('date'),
+    }
+
+
+def add_one_day(date_str: str) -> str:
+    """Add one day to a YYYY-MM-DD date string."""
+    from datetime import datetime, timedelta
+    d = datetime.strptime(date_str, "%Y-%m-%d")
+    return (d + timedelta(days=1)).strftime("%Y-%m-%d")
 
 
 def main():

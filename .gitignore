@@ -53,6 +53,14 @@ reports/*.html
 ui/nextjs/out-website/
 ui/nextjs/.deploy/
 
+# UI (Next.js)
+ui/nextjs/node_modules/
+ui/nextjs/.next/
+ui/nextjs/*.tsbuildinfo
+
+# Internal skills (not shipped with OSS)
+skills/
+
 # Website (marketing site)
 website/node_modules/
 website/.next/

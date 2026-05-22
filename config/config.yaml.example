@@ -106,7 +106,7 @@ reporting:
   timezone: "Europe/Lisbon"
 
   # Output directory for saved HTML reports
-  output_dir: "~/.hermes/scripts/team-intel/reports"
+  output_dir: "~/.axeng/scripts/team-intel/reports"
 
   # Include the MVP podium section in the report
   show_mvp: true
@@ -132,7 +132,7 @@ chat_action_items:
     # Baileys bridge — each line should at least include:
     #   {chatId, senderId, pushName, fromMe, body, mentionedJids,
     #    quotedParticipant, ts}
-    path: "~/.hermes/state/whatsapp-observed.jsonl"
+    path: "~/.axeng/state/whatsapp-observed.jsonl"
     # Cursor file (tracks file offset between runs)
     cursor_path: "~/.axeng/state/chat-action-cursor.json"
     # Optional HTTP endpoint to resolve chat IDs → friendly names.

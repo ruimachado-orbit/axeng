@@ -265,7 +265,7 @@ linear:
 email:
   recipients: ["engineering@mycompany.com"]
   from: "axeng@mycompany.com"
-  gmail_script: "~/.hermes/skills/productivity/google-workspace/scripts/google_api.py"
+  gmail_script: "~/.axeng/skills/productivity/google-workspace/scripts/google_api.py"
 ```
 
 ---
@@ -296,8 +296,8 @@ To enable Google Calendar and Gmail integration for OOO detection, 1:1 meeting i
 ### 2. Save Client Secret
 
 ```bash
-mkdir -p ~/.hermes/secrets
-mv ~/Downloads/client_secret_*.json ~/.hermes/secrets/google_client_secret.json
+mkdir -p ~/.axeng/secrets
+mv ~/Downloads/client_secret_*.json ~/.axeng/secrets/google_client_secret.json
 ```
 
 ### 3. Authenticate (Generate Token)
@@ -309,23 +309,23 @@ The Google API script handles OAuth automatically:
 make test-google
 
 # Or directly:
-python3 ~/.hermes/skills/productivity/google-workspace/scripts/google_api.py auth test
+python3 ~/.axeng/skills/productivity/google-workspace/scripts/google_api.py auth test
 ```
 
 This will:
 - Open your browser
 - Ask you to sign in to Google
 - Request Calendar and Gmail permissions
-- Save the token to `~/.hermes/secrets/google_token.json`
+- Save the token to `~/.axeng/secrets/google_token.json`
 
 ### 4. Verify
 
 ```bash
 # List calendar events
-python3 ~/.hermes/skills/productivity/google-workspace/scripts/google_api.py calendar list
+python3 ~/.axeng/skills/productivity/google-workspace/scripts/google_api.py calendar list
 
 # List recent emails
-python3 ~/.hermes/skills/productivity/google-workspace/scripts/google_api.py gmail list --max 5
+python3 ~/.axeng/skills/productivity/google-workspace/scripts/google_api.py gmail list --max 5
 ```
 
 **That's it!** Axeng will now use Google Calendar for OOO detection and 1:1 meeting insights.
@@ -592,7 +592,7 @@ docker compose -f docker/docker-compose.yml down
 Axeng has its own `.env` and `config/config.yaml`. No Hermes needed. Everything is self-contained in the axeng directory.
 
 ### Integrated with Hermes (for Axemaster users)
-If you already have Hermes running at `~/.hermes`, the docker-compose mounts your `~/.hermes` into the container. Axeng reuses your existing Google tokens, Linear credentials, and Obsidian vault — no duplicate config needed.
+If you already have Hermes running at `~/.axeng`, the docker-compose mounts your `~/.axeng` into the container. Axeng reuses your existing Google tokens, Linear credentials, and Obsidian vault — no duplicate config needed.
 
 ```bash
 # Link axeng commands system-wide
@@ -616,14 +616,14 @@ A: No. Self-hosted. You only pay for your LLM API calls (~$0.02–0.10/day at Cl
 A: Axemaster is the AI agent itself (what you talk to). Axeng is a set of automated report scripts that run on a schedule — standups, weekly reports, sprint health. They can run independently or together.
 
 **Q: Can I run it without Docker?**
-A: Yes — `pip install -r requirements.txt` + `streamlit run ui/app.py`. The Docker path is the easiest and most reproducible.
+A: Yes — `cd ui/nextjs && npm install && npm run dev`. The Docker path is the easiest and most reproducible.
 
 **Q: How do I get the Linear project ID?**
 A: Open the project in Linear. The ID is the last part of the URL:
 `app.linear.app/workspace/PROJECT_SLUG/PROJECT_ID` → copy the ID at the end.
 
 **Q: Can I add custom reports?**
-A: Yes. Add a new Python script in `src/`, wire it to a cron job in `~/.hermes/scripts/`, done.
+A: Yes. Add a new Python script in `src/`, wire it to a cron job in `~/.axeng/scripts/`, done.
 
 **Q: Does it work on Linux/Windows?**
 A: Yes — Docker works on both. Homebrew works on macOS and Linux.
@@ -656,7 +656,7 @@ axeng/
 │       ├── offboarding.py     # 🛡️ Offboarding tool
 │       └── linear_vacations.sh
 ├── ui/
-│   └── app.py          # Streamlit dashboard (port 8501)
+│   └── nextjs/         # Next.js dashboard (port 3000)
 ├── docker/
 │   ├── Dockerfile
 │   └── docker-compose.yml
@@ -683,7 +683,7 @@ Keynote slides available at [github.com/ruimachado-orbit/axeng/releases](https:/
 git clone https://github.com/ruimachado-orbit/axeng.git
 cd axeng
 cp .env.example .env && cp config/config.yaml.example config/config.yaml
-streamlit run ui/app.py  # run locally
+npm install && npm run dev  # run Next.js UI (port 3000)
 git checkout -b feat/your-feature && git push && open PR
 ```
 
@@ -691,4 +691,4 @@ git checkout -b feat/your-feature && git push && open PR
 
 ## 📄 License
 
-MIT — use it, fork it, build on it. No strings attached.
+GPL-3.0 — use it, fork it, build on it. Keep it open.

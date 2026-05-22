@@ -45,37 +45,37 @@ setup-env: ## Set up .env and config files
 	else \
 		echo "✅ config.yaml already exists"; \
 	fi
-	@mkdir -p ~/.hermes/secrets
-	@mkdir -p ~/.hermes/skills/productivity/google-workspace/scripts
+	mkdir -p ~/.axeng/secrets
+	@mkdir -p ~/.axeng/skills/productivity/google-workspace/scripts
 
 setup-google: ## Set up Google Workspace authentication
 	@echo "🔐 Setting up Google Workspace authentication..."
 	@echo ""
 	@echo "Prerequisites:"
 	@echo "  1. Download OAuth client secret from Google Cloud Console"
-	@echo "  2. Save it as ~/.hermes/secrets/google_client_secret.json"
+	@echo "  2. Save it as ~/.axeng/secrets/google_client_secret.json"
 	@echo ""
 	@echo "Steps:"
 	@echo "  1. Go to: https://console.cloud.google.com/"
 	@echo "  2. Create a project (or select existing)"
 	@echo "  3. Enable APIs: Calendar API + Gmail API"
 	@echo "  4. Create OAuth 2.0 credentials (Desktop app)"
-	@echo "  5. Download JSON and save to: ~/.hermes/secrets/google_client_secret.json"
+	@echo "  5. Download JSON and save to: ~/.axeng/secrets/google_client_secret.json"
 	@echo ""
-	@if [ -f ~/.hermes/secrets/google_client_secret.json ]; then \
+	@if [ -f ~/.axeng/secrets/google_client_secret.json ]; then \
 		echo "✅ Client secret found!"; \
 		echo ""; \
 		echo "Now run: make test-google"; \
 	else \
-		echo "⚠️  Client secret not found at ~/.hermes/secrets/google_client_secret.json"; \
+		echo "⚠️  Client secret not found at ~/.axeng/secrets/google_client_secret.json"; \
 	fi
 
 test-google: ## Test Google Workspace authentication (generates token)
 	@echo "🧪 Testing Google authentication..."
-	@python3 ~/.hermes/skills/productivity/google-workspace/scripts/google_api.py auth test
+	@python3 ~/.axeng/skills/productivity/google-workspace/scripts/google_api.py auth test
 	@echo ""
 	@echo "✅ Google authentication successful!"
-	@echo "   Token saved to: ~/.hermes/secrets/google_token.json"
+	@echo "   Token saved to: ~/.axeng/secrets/google_token.json"
 
 dev: ## Start Next.js UI in development mode
 	@echo "🚀 Starting Axeng Next.js UI (dev mode)..."

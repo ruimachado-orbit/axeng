@@ -27,7 +27,7 @@ from config import (
 
 # ── Env helpers (before FastAPI imports) ─────────────────────────────────────
 def load_env() -> dict:
-    env_file = Path.home() / ".hermes" / ".env"
+    env_file = Path.home() / ".axeng" / ".env"
     env = {}
     if env_file.exists():
         for ln in env_file.read_text().splitlines():

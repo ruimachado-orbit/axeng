@@ -113,8 +113,8 @@ export default function AxengWebsitePage() {
               </div>
               <div className="text-sm font-semibold tracking-wide text-white">Axeng</div>
             </Link>
-            <a href="#" target="_blank" rel="noopener noreferrer" className="text-sm text-slate-500 transition hover:text-slate-400">
-              Open Source
+            <a href="https://github.com/ruimachado-orbit/axeng" target="_blank" rel="noopener noreferrer" className="text-sm text-slate-500 transition hover:text-slate-400">
+              ★ Open Source
             </a>
           </div>
 
@@ -127,7 +127,7 @@ export default function AxengWebsitePage() {
           </nav>
 
           <a
-            href="#"
+            href="https://github.com/ruimachado-orbit/axeng#readme"
             className="rounded-full border border-cyan-300/30 bg-cyan-300/10 px-5 py-2.5 text-sm font-medium text-cyan-100 shadow-[0_0_24px_rgba(34,211,238,0.14)] transition hover:bg-cyan-300/16"
           >
             Get Started
@@ -250,7 +250,7 @@ export default function AxengWebsitePage() {
           </div>
           <p className="mt-8 text-sm text-slate-500">
             Need more integrations?{' '}
-            <a href="#" target="_blank" rel="noopener noreferrer" className="font-medium text-cyan-300 transition hover:text-cyan-200">
+            <a href="https://github.com/ruimachado-orbit/axeng" target="_blank" rel="noopener noreferrer" className="font-medium text-cyan-300 transition hover:text-cyan-200">
               The community
             </a>{' '}
             can build custom connectors for your stack.
@@ -455,7 +455,7 @@ export default function AxengWebsitePage() {
             Install locally, connect the sources your team already uses, and let Axeng turn operational noise into a daily execution rhythm.
           </p>
           <div className="mt-8 flex justify-center">
-            <a href="#" className="inline-flex items-center justify-center gap-2 rounded-full bg-cyan-200 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-100">
+            <a href="https://github.com/ruimachado-orbit/axeng#readme" className="inline-flex items-center justify-center gap-2 rounded-full bg-cyan-200 px-6 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-100">
               Get Started <ChevronRight className="h-4 w-4" />
             </a>
           </div>
@@ -477,7 +477,7 @@ export default function AxengWebsitePage() {
             <a href="#signal" className="hover:text-cyan-200">Signal</a>
             <a href="#capabilities" className="hover:text-cyan-200">Capabilities</a>
             <a href="#workflow" className="hover:text-cyan-200">Workflow</a>
-            <a href="https://github.com/axeng/axeng" className="hover:text-cyan-200">GitHub</a>
+            <a href="https://github.com/ruimachado-orbit/axeng" className="hover:text-cyan-200">GitHub</a>
           </div>
         </div>
       </footer>

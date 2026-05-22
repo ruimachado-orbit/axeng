@@ -23,19 +23,15 @@ services:
       - ~/.config/gh:/root/.config/gh:ro
 
       # Hermes home (for API keys, Google tokens used by the tools)
-      - ~/.hermes:/root/.hermes:ro
+      - ~/.axeng:/root/.axeng:ro
     environment:
       - PYTHONPATH=/app/src
-    command: >
+    command: >-
       sh -c "
-        # Copy config from example if not exists
-        cp config/config.yaml.example config/config.yaml 2>/dev/null || true;
-
-        # Run the Streamlit web UI (always-on for self-hosted)
-        streamlit run ui/app.py --server.port 8501 --server.address 0.0.0.0 --browser.gatherUsageStats false
+        python -m uvicorn ui.nextjs.api_server:app --host 0.0.0.0 --port 3457
       "
     ports:
-      - "8501:8501"
+      - "3457:3457"
 
   # Optional: PostgreSQL for multi-user mode
   # postgres:

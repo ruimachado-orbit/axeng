@@ -26,6 +26,7 @@ COPY bin/ /app/bin/
 ENV PYTHONPATH=/app/src
 ENV AXENG_HOME=/app
 
-EXPOSE 8501
+EXPOSE 3457
 
-CMD ["streamlit", "run", "ui/app.py", "--server.port", "8501", "--server.address", "0.0.0.0", "--browser.gatherUsageStats", "false"]
+# Start the API server
+CMD ["uvicorn", "ui.nextjs.api_server:app", "--host", "0.0.0.0", "--port", "3457"]

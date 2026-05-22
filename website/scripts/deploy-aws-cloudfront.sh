@@ -10,9 +10,9 @@
 #   AWS_PROFILE=default AWS_REGION=us-east-1 BUCKET_NAME=axeng-marketing ./scripts/deploy-aws-cloudfront.sh
 #
 # Optional custom domain / Cloudflare DNS flow:
-#   1. Request/validate an ACM cert in us-east-1 for the domain, e.g. axeng.maiolabs.ai
+#   1. Request/validate an ACM cert in us-east-1 for the domain, e.g. your-domain.com
 #   2. Run with:
-#      ALIASES=axeng.maiolabs.ai CERT_ARN=arn:aws:acm:us-east-1:... ./scripts/deploy-aws-cloudfront.sh
+#      ALIASES=your-domain.com CERT_ARN=arn:aws:acm:us-east-1:... ./scripts/deploy-aws-cloudfront.sh
 #   3. Point Cloudflare DNS CNAME axeng -> <distribution>.cloudfront.net
 #
 # If CERT_ARN is omitted, the script creates/updates a CloudFront distribution on the default
@@ -234,5 +234,5 @@ printf "\nCloudflare DNS next step:\n"
 printf "  CNAME axeng -> %s\n" "$DIST_DOMAIN"
 if [ -z "$ALIASES" ]; then
   printf "\nNote: this distribution currently uses the default CloudFront certificate/domain.\n"
-  printf "For axeng.maiolabs.ai with DNS-only CNAME, re-run with ALIASES + CERT_ARN after ACM DNS validation.\n"
+  printf "For a custom domain with DNS-only CNAME, re-run with ALIASES + CERT_ARN after ACM DNS validation.\n"
 fi

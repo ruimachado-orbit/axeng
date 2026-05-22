@@ -17,7 +17,16 @@ email:
 
   # Path to the google_api.py Gmail helper script
   # The script should support: gmail send --to --subject --body --html
-  gmail_script: "~/.hermes/skills/productivity/google-workspace/scripts/google_api.py"
+  gmail_script: "~/.axeng/skills/productivity/google-workspace/scripts/google_api.py"
+
+
+# ───────────────────────────────────────────────────────────────
+# VACATIONS (PTO)
+# ───────────────────────────────────────────────────────────────
+vacations:
+  # Linear project ID for the Team Vacations project
+  # Create a project in Linear and paste its ID here
+  project_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
 
 
 # ───────────────────────────────────────────────────────────────
@@ -49,7 +58,7 @@ github:
 # LINEAR
 # ───────────────────────────────────────────────────────────────
 linear:
-  # Linear API key — stored in ~/.hermes/.env as LINEAR_API_KEY
+  # Linear API key — stored in .env as LINEAR_API_KEY
   # api_key: "lin_xxxx"  # Not needed here; script reads from .env
 
   # Number of issues per project to fetch for roadmap cards

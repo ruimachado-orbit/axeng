@@ -24,7 +24,7 @@ def load_env():
     if axeng_home:
         env_file = Path(axeng_home) / ".env"
     else:
-        env_file = Path.home() / ".hermes" / ".env"
+        env_file = Path.home() / ".axeng" / ".env"
 
     env = {}
     if env_file.exists():

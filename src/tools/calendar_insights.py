@@ -17,7 +17,7 @@ from config import get, vault_path
 
 
 # Default to built-in calendar if Google API unavailable
-DEFAULT_GAPI_SCRIPT = "~/.hermes/skills/productivity/google-workspace/scripts/google_api.py"
+DEFAULT_GAPI_SCRIPT = "~/.axeng/skills/productivity/google-workspace/scripts/google_api.py"
 
 
 def fetch_calendar_via_gapi(days: int = 7) -> list:

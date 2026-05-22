@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import vault_path, get, team_members
 
 
-LAST_SYNC_PATH = Path.home() / ".hermes" / "scripts" / "team-intel" / "last-sync.json"
+LAST_SYNC_PATH = Path.home() / ".axeng" / "scripts" / "team-intel" / "last-sync.json"
 
 
 def read_md(file_path: str) -> str:

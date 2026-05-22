@@ -4,13 +4,13 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AXENG_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+AXENG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$AXENG_DIR"
 
 echo "📦 Pulling latest Axeng..."
 git pull
 echo "🔨 Rebuilding Docker image..."
-docker compose -f docker/docker-compose.yml build
+docker compose -f "$AXENG_DIR/docker-compose.yml" build
 echo "🔄 Restarting..."
-docker compose -f docker/docker-compose.yml up -d
+docker compose -f "$AXENG_DIR/docker-compose.yml" up -d
 echo "✅ Axeng updated and running at http://localhost:8501"

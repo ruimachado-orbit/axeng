@@ -17,7 +17,7 @@ from llm_gateway import call_with_fallback, status as llm_status, get_available_
 
 TOOLS_DIR = SCRIPT_DIR / "tools"
 SYSTEM_PROMPT_PATH = SCRIPT_DIR.parent / "prompts" / "engineering-manager-code-act.md"
-LAST_SYNC = Path.home() / ".hermes" / "scripts" / "team-intel" / "last-sync.json"
+LAST_SYNC = Path.home() / ".axeng" / "scripts" / "team-intel" / "last-sync.json"
 
 
 def read_md(path: str) -> str:

@@ -11,7 +11,7 @@ SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))
 from config import get, vault_path, github_orgs, github_repos, github_name_map, ex_members
 
-LAST_SYNC = Path.home() / ".hermes" / "scripts" / "team-intel" / "last-sync.json"
+LAST_SYNC = Path.home() / ".axeng" / "scripts" / "team-intel" / "last-sync.json"
 
 
 def now_iso():
@@ -123,7 +123,7 @@ def fetch_calendar_insights() -> dict:
     result = {"today": [], "this_week": [], "upcoming_1on1s": [], "team_meetings": []}
 
     try:
-        GAPI = get("calendar.gapi_script", "python3 ~/.hermes/skills/productivity/google-workspace/scripts/google_api.py")
+        GAPI = get("calendar.gapi_script", "python3 ~/.axeng/skills/productivity/google-workspace/scripts/google_api.py")
         start = datetime.now().strftime("%Y-%m-%dT00:00:00Z")
         end = (datetime.now() + timedelta(days=7)).strftime("%Y-%m-%dT23:59:59Z")
 
@@ -171,7 +171,7 @@ def fetch_email_intel() -> dict:
     result = {"unread_count": 0, "decisions": [], "important_threads": []}
 
     try:
-        GAPI = get("calendar.gapi_script", "python3 ~/.hermes/skills/productivity/google-workspace/scripts/google_api.py")
+        GAPI = get("calendar.gapi_script", "python3 ~/.axeng/skills/productivity/google-workspace/scripts/google_api.py")
 
         try:
             cmd = f'{GAPI} gmail search "is:unread newer_than:2d" --max 20'

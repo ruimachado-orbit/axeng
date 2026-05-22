@@ -22,8 +22,8 @@ SCOPES = [
 ]
 
 # Get paths from environment or use defaults
-CLIENT_SECRET_PATH = Path(os.getenv('GOOGLE_CLIENT_SECRET', '~/.hermes/secrets/google_client_secret.json')).expanduser()
-TOKEN_PATH = Path(os.getenv('GOOGLE_TOKEN_PATH', '~/.hermes/secrets/google_token.json')).expanduser()
+CLIENT_SECRET_PATH = Path(os.getenv('GOOGLE_CLIENT_SECRET', '~/.axeng/secrets/google_client_secret.json')).expanduser()
+TOKEN_PATH = Path(os.getenv('GOOGLE_TOKEN_PATH', '~/.axeng/secrets/google_token.json')).expanduser()
 
 
 def get_credentials():

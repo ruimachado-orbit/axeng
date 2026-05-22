@@ -116,7 +116,7 @@ check "bin/ directory" "test -d $AXENG_DIR/bin" required
 
 echo ""
 echo "═══ Docker ════════════════════════════════════════════════════"
-check "docker-compose.yml" "test -f $AXENG_DIR/docker/docker-compose.yml" required
+check "docker-compose.yml" "test -f $AXENG_DIR/docker-compose.yml" required
 check "Dockerfile" "test -f $AXENG_DIR/docker/Dockerfile" required
 
 echo ""

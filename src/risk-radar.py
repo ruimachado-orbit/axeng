@@ -16,7 +16,7 @@ from pathlib import Path
 
 SCRIPT_DIR = Path(__file__).parent.resolve()
 sys.path.insert(0, str(SCRIPT_DIR))  # local config first (has all legacy constants)
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".axeng")))
 ENV_FILE = HERMES_HOME / ".env"
 TEAM_INTEL_DIR = HERMES_HOME / "scripts" / "team-intel"
 sys.path.insert(1, str(TEAM_INTEL_DIR))  # hermes fallback second

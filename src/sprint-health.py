@@ -15,7 +15,7 @@ from pathlib import Path
 # ── Paths ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent.resolve()
 sys.path.insert(0, str(SCRIPT_DIR))  # local config first (has all legacy constants)
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".axeng")))
 ENV_FILE = HERMES_HOME / ".env"
 TEAM_INTEL_DIR = HERMES_HOME / "scripts" / "team-intel"
 sys.path.insert(1, str(TEAM_INTEL_DIR))  # hermes fallback second
@@ -465,7 +465,7 @@ if __name__ == "__main__":
     if args.html or args.save:
         html = build_html(health_list)
         if args.save:
-            out_dir = Path.home() / ".hermes" / "scripts" / "team-intel" / "reports"
+            out_dir = Path.home() / ".axeng" / "scripts" / "team-intel" / "reports"
             out_dir.mkdir(parents=True, exist_ok=True)
             path = out_dir / f"sprint-health-{datetime.now().strftime('%Y-%m-%d')}.html"
             path.write_text(html)

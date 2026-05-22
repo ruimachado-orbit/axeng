@@ -13,10 +13,12 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import linear_query from linear_tool
 from tools.linear_tool import linear_query, load_env
+from config import get as cfg_get
 
 
-# Vacation project ID (from linear_vacations.sh)
-VACATION_PROJECT_ID = "VACATION_PROJECT_ID_PLACEHOLDER"
+def vacation_project_id() -> str:
+    """Get the Linear project ID for vacations from config, with a sensible fallback."""
+    return cfg_get("vacations.project_id", "VACATION_PROJECT_ID_PLACEHOLDER")
 
 
 def list_vacations(month: str = None) -> dict:
@@ -33,7 +35,7 @@ def list_vacations(month: str = None) -> dict:
     query = f"""
     {{
       issues(
-        filter: {{ project: {{ id: {{ eq: "{VACATION_PROJECT_ID}" }} }} }}
+        filter: {{ project: {{ id: {{ eq: "{vacation_project_id()}" }} }} }}
         first: 200
       ) {{
         nodes {{

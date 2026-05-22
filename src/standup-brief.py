@@ -16,7 +16,7 @@ from zoneinfo import ZoneInfo
 # ── Config paths ──────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent
 sys.path.insert(0, str(SCRIPT_DIR))  # local config first (has all legacy constants)
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".axeng")))
 ENV_FILE = HERMES_HOME / ".env"
 TEAM_INTEL_DIR = HERMES_HOME / "scripts" / "team-intel"
 sys.path.insert(1, str(TEAM_INTEL_DIR))  # team-intel second (fallback)
@@ -223,7 +223,7 @@ def fetch_linear_issues() -> dict:
 def fetch_ooo_today() -> list:
     """Check Google Calendar for all-day events matching OOO keywords."""
     try:
-        mcp = Path("~/.hermes/skills/productivity/google-workspace/scripts/google_api.py").expanduser()
+        mcp = Path("~/.axeng/skills/productivity/google-workspace/scripts/google_api.py").expanduser()
         raw = subprocess.check_output(
             ["python3", str(mcp), "calendar", "list",
              "--days", "1", "--format", "json"],

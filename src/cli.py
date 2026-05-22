@@ -96,8 +96,8 @@ def update_env_file(config: dict):
     # Google (optional)
     if config.get("google_enabled"):
         env_lines.append("# Google Workspace")
-        env_lines.append("GOOGLE_CLIENT_SECRET=~/.hermes/secrets/google_client_secret.json")
-        env_lines.append("GOOGLE_TOKEN_PATH=~/.hermes/secrets/google_token.json")
+        env_lines.append("GOOGLE_CLIENT_SECRET=~/.axeng/secrets/google_client_secret.json")
+        env_lines.append("GOOGLE_TOKEN_PATH=~/.axeng/secrets/google_token.json")
         env_lines.append("")
 
     ENV_FILE.write_text("\n".join(env_lines))
@@ -222,7 +222,7 @@ def configure():
         console.print("1. Go to https://console.cloud.google.com/")
         console.print("2. Enable Calendar API + Gmail API")
         console.print("3. Create OAuth credentials")
-        console.print("4. Download and save to ~/.hermes/secrets/google_client_secret.json")
+        console.print("4. Download and save to ~/.axeng/secrets/google_client_secret.json")
         console.print("")
 
         if Confirm.ask("Have you saved the client secret?"):
@@ -440,7 +440,7 @@ def start():
     if not CONFIG_FILE.exists():
         console.print("[yellow]Warning:[/yellow] Not configured via CLI")
         console.print("You can run: [cyan]axeng configure[/cyan]")
-        console.print("Or edit: [cyan]~/.hermes/.env[/cyan] and [cyan]config/config.yaml[/cyan]\n")
+        console.print("Or edit: [cyan]~/.axeng/.env[/cyan] and [cyan]config/config.yaml[/cyan]\n")
 
     # Find axeng directory
     axeng_dir = Path(__file__).parent.parent

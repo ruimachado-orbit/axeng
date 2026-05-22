@@ -12,7 +12,7 @@ from typing import Optional
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 SCRIPT_DIR = Path(__file__).parent
-HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".hermes")))
+HERMES_HOME = Path(os.environ.get("HERMES_HOME", str(Path.home() / ".axeng")))
 ENV_FILE = HERMES_HOME / ".env"
 TOKEN_PATH = HERMES_HOME / "google_token.json"
 VAULT_PATH = Path.home() / "Documents" / "Obsidian Vault"
@@ -65,7 +65,7 @@ def parse_1on1_person(title: str, attendees: list) -> Optional[dict]:
 
     # Fall back to first attendee who's not Rui
     env = load_env()
-    self_email = env.get("USER_EMAIL", "user@example.com").lower()
+    self_email = env.get("USER_EMAIL", "").lower()
     for a in attendees:
         email = (a.get("email") or "").lower()
         if email and email != self_email and "@" in email:
@@ -87,7 +87,14 @@ def fetch_person_commits(github_handle: str) -> list:
         return []
     commits = []
     cutoff = (datetime.now(timezone.utc) - timedelta(days=7)).strftime("%Y-%m-%d")
-    for org in ["OrbitPlatform", "Maio-Labs", "Maio-Labs-Secret-Sauce", "ruimachado-orbit"]:
+    # Read orgs from config
+    org_list = []
+    try:
+        from config import github_orgs
+        org_list = github_orgs()
+    except Exception:
+        pass
+    for org in org_list:
         try:
             raw = subprocess.check_output(
                 f'gh api repos/{org}/*/commits --paginate -f author="{github_handle}" -f since="{cutoff}"',

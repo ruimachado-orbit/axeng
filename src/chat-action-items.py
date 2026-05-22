@@ -13,7 +13,7 @@ Config (config.yaml):
     chat_action_items:
       enabled: true
       source:
-        path: "~/.hermes/state/whatsapp-observed.jsonl"
+        path: "~/.axeng/state/whatsapp-observed.jsonl"
         cursor_path: "~/.axeng/state/chat-action-cursor.json"
         # Optional URL returning {"groups":[{"id","subject"}]} to resolve
         # chat IDs to friendly names (e.g. http://127.0.0.1:3000/groups
@@ -21,9 +21,9 @@ Config (config.yaml):
         subjects_url: "http://127.0.0.1:3000/groups"
       # Manual override / fallback for chat name resolution
       chat_subjects:
-        "5511999999999-9999999999@g.us": "Familia Machado"
+        "5511999999999-9999999999@g.us": "Family Group"
       linear:
-        team_key: "PER"
+        team_key: "YOUR_TEAM_KEY"
         # Whose ID to assign issues to when the LLM classifies owner=="me"
         viewer_self: true   # if true, look up `viewer { id }` and assign
       telegram:
@@ -54,7 +54,7 @@ from config import get
 from llm_gateway import call_with_fallback
 
 LINEAR_GRAPHQL = "https://api.linear.app/graphql"
-HERMES_ENV = Path.home() / ".hermes" / ".env"
+HERMES_ENV = Path.home() / ".axeng" / ".env"
 DAY_INDEX = {"mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
 
 
@@ -332,7 +332,7 @@ def main() -> int:
     if not in_window(args.force):
         return 0
 
-    source = expand(get("chat_action_items.source.path", "~/.hermes/state/whatsapp-observed.jsonl"))
+    source = expand(get("chat_action_items.source.path", "~/.axeng/state/whatsapp-observed.jsonl"))
     cursor_path = expand(get("chat_action_items.source.cursor_path", "~/.axeng/state/chat-action-cursor.json"))
 
     cursor = load_cursor(cursor_path)

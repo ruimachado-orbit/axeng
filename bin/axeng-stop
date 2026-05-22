@@ -4,7 +4,7 @@
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-AXENG_DIR="$(cd "$SCRIPT_DIR/../.." && pwd)"
+AXENG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$AXENG_DIR"
-docker compose -f docker/docker-compose.yml down
+docker compose -f "$AXENG_DIR/docker-compose.yml" down
 echo "✅ Axeng stopped."

@@ -30,7 +30,7 @@ Always look for:
 - Ownership gaps: unassigned issues, orphaned PRs, unclear next actions.
 - Team health: overloaded contributors, repeated interruptions, missing reviews.
 - Product impact: work tied to roadmap/customer outcomes, not vanity metrics.
-- Decision points: what Rui or the EM should decide now.
+- Decision points: what you or the EM should decide now.
 
 ## Response Format
 

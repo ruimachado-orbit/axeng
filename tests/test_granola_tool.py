@@ -38,7 +38,7 @@ def test_note_with_transcript_uses_include_param(monkeypatch):
             return json.dumps({
                 "id": "not_123",
                 "title": "Weekly sync",
-                "transcript": [{"speaker": "Rui", "text": "Ship it."}],
+                "transcript": [{"speaker": "User", "text": "Ship it."}],
             }).encode()
 
     def fake_urlopen(req, timeout):
@@ -83,11 +83,11 @@ def test_transcript_text_handles_common_shapes():
     granola = load_granola_module()
 
     text = granola._text_from_transcript([
-        {"speaker": "Rui", "text": "Hello"},
+        {"speaker": "User", "text": "Hello"},
         {"speaker_name": "Daniel", "content": "World"},
         "raw line",
     ])
 
-    assert "Rui: Hello" in text
+    assert "User: Hello" in text
     assert "Daniel: World" in text
     assert "raw line" in text

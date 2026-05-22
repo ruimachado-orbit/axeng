@@ -83,12 +83,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         <div className="flex items-center gap-3 p-2 rounded-xl bg-white/5 hover:bg-white/10 transition-colors cursor-default">
           <Avatar className="w-8 h-8 ring-2 ring-indigo-500/50 ring-offset-2 ring-offset-slate-900">
             <AvatarFallback className="bg-gradient-to-br from-indigo-500 to-purple-600 text-white text-xs font-bold">
-              RM
+              AX
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <p className="text-white text-sm font-medium truncate">Rui Machado</p>
-            <p className="text-slate-400 text-xs truncate">CTPO · Maio Labs</p>
+            <p className="text-white text-sm font-medium truncate">Axeng Admin</p>
+            <p className="text-slate-400 text-xs truncate">Admin</p>
           </div>
         </div>
       </div>

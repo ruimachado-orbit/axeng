@@ -157,7 +157,7 @@ def seed_demo_logs():
         ("2026-05-10T09:42:00", "report", "success", "Gerou Standup Brief", "Enviado para Telegram · 7 membros · 3 issues pendentes", 2840, "standup-brief.py", "Telegram"),
         ("2026-05-10T09:38:15", "sync", "success", "Sincronizou Linear", "11 projetos · 38 issues abertas · 12 completadas", 800, "linear_query", None),
         ("2026-05-10T09:30:00", "sync", "info", "Detetou OOO: João FCSantos", "Vacation label ativo no Linear · até 16 Mai", None, None, "João FCSantos"),
-        ("2026-05-10T09:15:30", "delivery", "success", "Briefing enviado", "Telegram · Rui Machado · 3 action items", 520, None, "Telegram:7910783991"),
+        ("2026-05-10T09:15:30", "delivery", "success", "Briefing enviado", "Telegram · User · 3 action items", 520, None, "Telegram:7910783991"),
         ("2026-05-10T08:55:00", "review", "info", "Reviu PR #847", "orbit-health · approved", 1200, None, "Orbit-Verticals/orbit-health#847"),
         ("2026-05-10T08:42:10", "tool_call", "info", "Buscou contributors", "Orbit-Verticals/repos", 600, "gh api repos", None),
         ("2026-05-10T08:30:00", "sync", "success", "Team Intel Daily Sync", "Sincronizado · 0 mudanças", 1200, "team_intel.py", None),

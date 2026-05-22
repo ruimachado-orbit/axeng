@@ -2,10 +2,10 @@
 "use strict";
 const PptxGenJS = require("pptxgenjs");
 
-// ── MAIO LABS THEME ───────────────────────────────────────────────────────────
+// ── AXENG THEME ───────────────────────────────────────────────────────────
 const BG      = "FFFFFF";
 const CARD    = "F7F7F7";
-const ACCENT  = "D4E815";  // lime green (Maio Labs accent)
+const ACCENT  = "D4E815";  // lime green (Axeng accent)
 const BLACK   = "000000";
 const WHITE   = "FFFFFF";
 const GRAY    = "666666";
@@ -18,7 +18,7 @@ function S(pres) {
   return s;
 }
 
-// Solid black top bar (Maio Labs style)
+// Solid black top bar (Axeng style)
 function topBar(s, h = 0.18) {
   s.addShape("rect", { x: 0, y: 0, w: 10, h, fill: { color: BLACK } });
 }
@@ -56,7 +56,7 @@ function slide1(pres) {
   topBar(s, 0.22);
 
   // Logo wordmark
-  s.addText("MAIO LABS", {
+  s.addText("AXENG", {
     x: 0.3, y: 0.05, w: 2.5, h: 0.16,
     fontSize: 9, bold: true, color: "AAAAAA", fontFace: "Arial",
     charSpacing: 3, margin: 0,
@@ -91,7 +91,7 @@ function slide1(pres) {
       { fontSize: 11, bold: true, color: BLACK, valign: "middle" });
   });
 
-  footerBar(s, "github.com/ruimachado-orbit/axeng  |  Rui Machado @ Maio Labs  |  2025");
+  footerBar(s, "github.com/axeng/axeng  |  Axeng — Open Source  |  2025");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -125,7 +125,7 @@ function slide2(pres) {
     txt(s, sub, 0.9, y + 0.28, 8.6, 0.25, { fontSize: 10, color: GRAY });
   });
 
-  footerBar(s, "github.com/ruimachado-orbit/axeng  |  Built by Rui Machado @ Maio Labs");
+  footerBar(s, "github.com/axeng/axeng  |  Built by Axeng — Open Source");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -161,7 +161,7 @@ function slide3(pres) {
     txt(s, desc, 0.5, y + 0.3, 9.0, 0.28, { fontSize: 11, color: GRAY });
   });
 
-  footerBar(s, "github.com/ruimachado-orbit/axeng  |  Rui Machado @ Maio Labs");
+  footerBar(s, "github.com/axeng/axeng  |  Axeng — Open Source");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -210,7 +210,7 @@ function slide4(pres) {
   txt(s, "→  AXEMASTER", 4.55, 4.8, 0.9, 0.34,
     { fontSize: 9, bold: true, color: ACCENT });
 
-  footerBar(s, "github.com/ruimachado-orbit/axeng  |  Rui Machado @ Maio Labs");
+  footerBar(s, "github.com/axeng/axeng  |  Axeng — Open Source");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -260,7 +260,7 @@ function slide5(pres) {
       { fontSize: 10, color: GRAY });
   });
 
-  footerBar(s, "github.com/ruimachado-orbit/axeng  |  Rui Machado @ Maio Labs");
+  footerBar(s, "github.com/axeng/axeng  |  Axeng — Open Source");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -272,7 +272,7 @@ function slide6(pres) {
   // Full black background for impact
   s.addShape("rect", { x: 0, y: 0, w: 10, h: 5.625, fill: { color: BLACK } });
 
-  s.addText("MAIO LABS", {
+  s.addText("AXENG", {
     x: 0.3, y: 0.3, w: 2.5, h: 0.25,
     fontSize: 10, bold: true, color: "555555", fontFace: "Arial",
     charSpacing: 4, margin: 0,
@@ -305,7 +305,7 @@ function slide6(pres) {
   txt(s, "→ AXEMASTER", 0.3, 3.8, 1.7, 0.32,
     { fontSize: 10, bold: true, color: ACCENT, align: "center" });
 
-  s.addText("github.com/ruimachado-orbit/axeng", {
+  s.addText("github.com/axeng/axeng", {
     x: 0.3, y: 5.15, w: 9.4, h: 0.3,
     fontSize: 11, color: "555555", fontFace: "Arial", margin: 0,
   });
@@ -425,7 +425,7 @@ function slide8(pres) {
   txt(s, "⚡  Low-PM model: every repetitive PM task is automated through Hermes → Axemaster → Cron scripts",
     0.4, 5.07, 9.2, 0.14, { fontSize: 9, color: GRAY });
 
-  footerBar(s, "github.com/ruimachado-orbit/axeng  |  Rui Machado @ Maio Labs");
+  footerBar(s, "github.com/axeng/axeng  |  Axeng — Open Source");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -445,7 +445,7 @@ function slide9(pres) {
     0.3, 1.52, 9.4, 0.3, { fontSize: 12, color: GRAY });
 
   const steps = [
-    { icon: "📥", title: "FETCH", sub: "GraphQL → issues, sprints, projects, team members\nTeam: maiolabs | API Key: MAI" },
+    { icon: "📥", title: "FETCH", sub: "GraphQL → issues, sprints, projects, team members\\nTeam: workspace | API Key: set via env" },
     { icon: "🔍", title: "ANALYZE", sub: "GitHub commits → Linear keywords\nIn-progress? Blocked? Scope creep?" },
     { icon: "📤", title: "UPDATE", sub: "Sprint health → Linear desc\nWeekly summary → each project\nIdempotent writes" },
     { icon: "📊", title: "REPORT", sub: "Per-project commit cards\nRoadmap state → Email + Obsidian" },
@@ -471,7 +471,7 @@ function slide9(pres) {
         { fontSize: 16, color: ACCENT, align: "center", valign: "middle" });
   });
 
-  footerBar(s, "github.com/ruimachado-orbit/axeng  |  Rui Machado @ Maio Labs");
+  footerBar(s, "github.com/axeng/axeng  |  Axeng — Open Source");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -526,7 +526,7 @@ function slide10(pres) {
     txt(s, o.sub, 5.88, 2.68 + i * 0.62, 3.7, 0.24, { fontSize: 9, color: GRAY });
   });
 
-  footerBar(s, "github.com/ruimachado-orbit/axeng  |  Rui Machado @ Maio Labs");
+  footerBar(s, "github.com/axeng/axeng  |  Axeng — Open Source");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -581,7 +581,7 @@ function slide11(pres) {
     txt(s, t, 0.5, 4.1 + i * 0.22, 9.0, 0.22, { fontSize: 10, color: BLACK });
   });
 
-  footerBar(s, "github.com/ruimachado-orbit/axeng  |  Rui Machado @ Maio Labs");
+  footerBar(s, "github.com/axeng/axeng  |  Axeng — Open Source");
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -724,6 +724,6 @@ slide11(pres);
 slide12(pres);
 slide13(pres);
 
-pres.writeFile({ fileName: "/tmp/axeng-maiolabs.pptx" })
-  .then(() => console.log("✅ /tmp/axeng-maiolabs.pptx"))
+pres.writeFile({ fileName: "/tmp/axeng.pptx" })
+  .then(() => console.log("✅ /tmp/axeng.pptx"))
   .catch(e => console.error("ERROR:", e));

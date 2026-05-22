@@ -55,7 +55,7 @@ def list_person_profiles() -> list:
 
     profiles = []
     vault = vault_path()
-    equipa_path = Path(vault) / "Rui" / "equipa"
+    equipa_path = Path(vault) / get("obsidian.team_base", "team/equipa")
 
     if equipa_path.exists():
         for f in equipa_path.glob("*.md"):
@@ -68,7 +68,7 @@ def get_person_activity(person_name: str) -> dict:
     """Get activity for a specific person."""
     vault = vault_path()
     name_slug = person_name.lower().replace(" ", "-")
-    profile_path = Path(vault) / "Rui" / "equipa" / f"{name_slug}.md"
+    profile_path = Path(vault) / get("obsidian.team_base", "team/equipa") / f"{name_slug}.md"
     
     if profile_path.exists():
         return {
@@ -82,7 +82,7 @@ def get_person_activity(person_name: str) -> dict:
 def get_repo_activity() -> dict:
     """Get activity grouped by repository."""
     vault = vault_path()
-    overview_path = Path(vault) / "Rui" / "insights" / "team-overview.md"
+    overview_path = Path(vault) / get("obsidian.insights_base", "team/insights") / "team-overview.md"
     
     if overview_path.exists():
         return {
@@ -95,7 +95,7 @@ def get_repo_activity() -> dict:
 def get_metrics() -> dict:
     """Get team metrics."""
     vault = vault_path()
-    metrics_path = Path(vault) / "Rui" / "metrics" / "weekly-metrics.md"
+    metrics_path = Path(vault) / get("obsidian.metrics_path", "team/metrics/weekly-metrics.md")
     
     if metrics_path.exists():
         return {
@@ -124,7 +124,7 @@ def team_summary() -> dict:
     profiles = list_person_profiles()
     vault = vault_path()
     
-    overview_path = Path(vault) / "Rui" / "insights" / "team-overview.md"
+    overview_path = Path(vault) / get("obsidian.insights_base", "team/insights") / "team-overview.md"
     overview = read_md(str(overview_path)) if overview_path.exists() else ""
     
     return {
@@ -141,7 +141,7 @@ def query_person_full(person_name: str) -> str:
     """Get full report for a person including their repos worked."""
     vault = vault_path()
     name_slug = person_name.lower().replace(" ", "-")
-    profile_path = Path(vault) / "Rui" / "equipa" / f"{name_slug}.md"
+    profile_path = Path(vault) / get("obsidian.team_base", "team/equipa") / f"{name_slug}.md"
     
     if not profile_path.exists():
         return f"Persona '{person_name}' não encontrada no vault."
@@ -215,7 +215,7 @@ def search_vault(query: str, max_results: int = 20) -> dict:
 def team_member_status() -> dict:
     """Get status of all team members from profiles."""
     vault = vault_path()
-    equipa_path = Path(vault) / "Rui" / "equipa"
+    equipa_path = Path(vault) / get("obsidian.team_base", "team/equipa")
     statuses = []
     
     if not equipa_path.exists():

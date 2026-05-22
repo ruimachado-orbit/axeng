@@ -244,7 +244,7 @@ Atualizado: {now_iso()}
 *Perfil gerado automaticamente pelo Team Intel*
 """
 
-    base_path = Path(vault) / get("obsidian.team_base", "Rui/equipa")
+    base_path = Path(vault) / get("obsidian.team_base", "team/equipa")
     write_md(str(base_path / f"{name_slug}.md"), content)
 
 
@@ -319,7 +319,7 @@ def update_team_overview(github_data: dict, calendar_data: dict, email_data: dic
 *Gerado automaticamente — Team Intel*
 """
 
-    base_path = Path(vault) / get("obsidian.insights_base", "Rui/insights")
+    base_path = Path(vault) / get("obsidian.insights_base", "team/insights")
     write_md(str(base_path / "team-overview.md"), content)
 
 
@@ -331,7 +331,7 @@ def update_metrics(github_data: dict, vault: str):
 
     new_entry = f"| {date} | {total_prs} | {total_contributors} | {total_repos} |"
 
-    metrics_path = Path(vault) / get("obsidian.metrics_path", "Rui/metrics/weekly-metrics.md")
+    metrics_path = Path(vault) / get("obsidian.metrics_path", "team/metrics/weekly-metrics.md")
 
     if metrics_path.exists():
         with open(metrics_path) as f:

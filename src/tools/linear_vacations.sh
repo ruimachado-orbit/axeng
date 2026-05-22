@@ -3,9 +3,9 @@
 # Requires the environment variable LINEAR_API_KEY to be set.
 # ------------------------------------------------------------
 LIN_ENDPOINT="https://api.linear.app/graphql"
-VAC_LABEL_ID="VACATION_LABEL_ID_PLACEHOLDER"
+VAC_LABEL_ID="${VAC_LABEL_ID:-VAC_LABEL_ID_PLACEHOLDER}"
 VAC_PROJECT_ID="VACATION_PROJECT_ID_PLACEHOLDER"
-TEAM_ID="TEAM_ID_PLACEHOLDER"
+TEAM_ID="${TEAM_ID:-TEAM_ID_PLACEHOLDER}"
 
 add_vacation() {
   local name=$1 start=$2 end=$3 note=${4:-}

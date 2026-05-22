@@ -340,9 +340,9 @@ def build_html(health_list: list) -> str:
   <div style="margin-bottom:20px;">
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
       <div style="width:28px;height:28px;background:#000;border-radius:6px;display:flex;align-items:center;justify-content:center;">
-        <span style="color:#d4ff00;font-size:14px;font-weight:800;">M</span>
+        <span style="color:#d4ff00;font-size:14px;font-weight:800;">A</span>
       </div>
-      <span style="font-size:12px;font-weight:600;color:#666;">MAIO LABS</span>
+      <span style="font-size:12px;font-weight:600;color:#666;">AXENG</span>
     </div>
     <h1 style="margin:0;font-size:28px;font-weight:800;color:#000;letter-spacing:-1px;">Sprint Health</h1>
     <p style="margin:4px 0 0;font-size:13px;color:#666;">{today} · {len(health_list)} projects tracked</p>

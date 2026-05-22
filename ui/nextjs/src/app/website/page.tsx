@@ -89,7 +89,7 @@ const workflow = [
 const commands = [
   ['axeng standup', 'Generate today’s engineering standup brief'],
   ['axeng pr-health', 'Find stale PRs and review bottlenecks'],
-  ['axeng prep Rui', 'Prepare a 1:1 pre-read'],
+  ['axeng prep "John"', 'Prepare a 1:1 pre-read'],
   ['axeng report --weekly --send', 'Build and send the weekly team report'],
 ]
 

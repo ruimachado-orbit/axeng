@@ -49,10 +49,10 @@ def parse_1on1_person(title: str, attendees: list) -> Optional[dict]:
     """Return {'name': '...', 'github': '...', 'email': '...'} for the non-self person."""
     # Known team members by name pattern
     team_names = {
-        "daniel": "Daniel Almeida", "pedro": "Pedro Ferreira",
-        "diogo": "Diogo Oliveira", "rikkarth": "Rikkarth R.",
-        "anastasiia": "Anastasiia Mishchenko", "joão": "João FCSantos", "joao": "João FCSantos",
-        "luis": "Luis Santos",
+        "alice": "Alice Silva", "bob": "Bob Santos",
+        "carol": "Carol Chen", "daniel": "Daniel Kumar",
+        "eve": "Eve Johnson", "frank": "Frank Garcia", "francisco": "Francisco Garcia",
+        "grace": "Grace Lee",
     }
     # Try to extract name from title like "1:1 with Pedro" or "Pedro 1:1"
     title_lower = title.lower()
@@ -63,7 +63,7 @@ def parse_1on1_person(title: str, attendees: list) -> Optional[dict]:
                 if m.get("name") == full_name:
                     return m
 
-    # Fall back to first attendee who's not Rui
+    # Fall back to first attendee who's not self
     env = load_env()
     self_email = env.get("USER_EMAIL", "").lower()
     for a in attendees:

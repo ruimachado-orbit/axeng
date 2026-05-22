@@ -361,7 +361,7 @@ def _synthesize_logic(goal: str, tool_results: list) -> str:
                 continue
             tool = result.get("tool", "")
             if tool == "linear_summary":
-                parts.append(f"📋 **Maiolabs — Linear**")
+                parts.append(f"📋 **Axeng — Linear**")
                 parts.append(f"  • Todo: {result.get('metrics', {}).get('todo', 0)}")
                 parts.append(f"  • In Progress: {result.get('metrics', {}).get('in_progress', 0)}")
                 parts.append(f"  • My tasks: {result.get('my_tasks', 0)}")
@@ -491,7 +491,7 @@ def _synthesize_logic(goal: str, tool_results: list) -> str:
     combined = []
     try:
         vault = Path(vault_path())
-        overview = vault / get("obsidian.insights_base", "Rui/insights") / "team-overview.md"
+        overview = vault / get("obsidian.insights_base", "team/insights") / "team-overview.md"
         if overview.exists():
             content = read_md(str(overview))
             if content:

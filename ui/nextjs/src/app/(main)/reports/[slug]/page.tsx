@@ -14,7 +14,7 @@ const reportData: Record<string, {
   'standup-2026-05-10': {
     type: 'standup', title: 'Daily Standup — 10 Mai', date: '2026-05-10T07:30:00',
     generated_by: 'Axemaster', summary: '3 issues bloqueadas · João FCSantos OOO · 4 PRs pendentes',
-    members: ['Daniel', 'Luis', 'Rui', 'Pedro', 'Diogo', 'João FCSantos', 'Anastasiia'],
+    members: ['Alice', 'Bob', 'Carol', 'Dave', 'Eve', 'Frank', 'Grace'],
     metrics: [
       { label: 'Issues bloqueadas', value: '3', icon: '🚧' },
       { label: 'PRs pendentes', value: '4', icon: '🔀' },

@@ -3,7 +3,7 @@
 This agent provides a set of Bash helpers for managing team vacation data in Linear.
 
 ## Overview
-- **Label**: `Vacation` (id: `VACATION_LABEL_ID_PLACEHOLDER`)
+- **Label**: `Vacation` (id: `VAC_LABEL_ID_PLACEHOLDER`)
 - **Project**: `Team Vacations` (id: `VACATION_PROJECT_ID_PLACEHOLDER`)
 - **Initiative**: `Team Management` (id: `INITIATIVE_ID_PLACEHOLDER`)
 

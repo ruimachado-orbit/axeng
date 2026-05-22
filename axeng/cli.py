@@ -39,6 +39,13 @@ AXENG_HOME = Path(os.getenv("AXENG_HOME", Path.home() / ".axeng"))
 CONFIG_FILE = AXENG_HOME / "config.json"
 ENV_FILE = AXENG_HOME / ".env"
 
+def is_demo_mode() -> bool:
+    """Check if no real config exists — all env vars empty and no config.json."""
+    key_vars = ["GITHUB_TOKEN", "LINEAR_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "OPENCODE_API_KEY"]
+    all_empty = all(not os.environ.get(var, "") for var in key_vars)
+    config_missing = not CONFIG_FILE.exists()
+    return all_empty and config_missing
+
 def load_config() -> dict:
     """Load existing configuration"""
     if CONFIG_FILE.exists():
@@ -279,6 +286,9 @@ def chat(history: bool = typer.Option(False, "--history", help="Show chat histor
         border_style="cyan"
     ))
     console.print()
+    if is_demo_mode():
+        console.print("[yellow]⚡ Demo mode[/yellow] — showing example data. Run 'axeng configure' to connect your real tools.")
+        console.print()
 
     # Show smart suggestions
     try:
@@ -514,63 +524,85 @@ def status():
 
     console.print("[bold]Axeng Status[/bold]\n")
 
-    # Service status
-    ui_running = is_port_in_use(3000)
-    api_running = is_port_in_use(3457)
-
-    console.print("[bold cyan]Services:[/bold cyan]")
-    if ui_running and api_running:
-        console.print("  [green]✓[/green] Running - [link]http://localhost:3000[/link]")
-    elif ui_running or api_running:
-        console.print("  [yellow]⚠[/yellow] Partially running")
-    else:
+    if is_demo_mode():
+        from demo_data import DemoProvider
+        dp = DemoProvider()
+        demo = dp.status()
+        console.print("[bold cyan]Services:[/bold cyan]")
         console.print("  [yellow]○[/yellow] Stopped - run [cyan]axeng start[/cyan]")
+        console.print("\n[bold cyan]Integrations:[/bold cyan]")
+        for name, info in demo["integrations"].items():
+            label = name.replace("_", " ").title()
+            console.print(f"  {info['icon']} {label} - {info['message']}")
+        console.print(f"\n  [dim]{demo['summary']}[/dim]")
+    else:
+        # Service status
+        ui_running = is_port_in_use(3000)
+        api_running = is_port_in_use(3457)
 
-    # Integration status
-    console.print("\n[bold cyan]Integrations:[/bold cyan]")
-
-    # Check Linear
-    axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
-    env = {**os.environ, "AXENG_HOME": axeng_home}
-
-    try:
-        result = subprocess.run(
-            ["python3", str(Path(__file__).parent / "tools" / "linear_tool.py"), "mine"],
-            capture_output=True, text=True, timeout=5, env=env
-        )
-        data = json.loads(result.stdout)
-        if "error" not in data:
-            console.print(f"  [green]✓[/green] Linear - {data.get('total', 0)} issues assigned to you")
+        console.print("[bold cyan]Services:[/bold cyan]")
+        if ui_running and api_running:
+            console.print("  [green]✓[/green] Running - [link]http://localhost:3000[/link]")
+        elif ui_running or api_running:
+            console.print("  [yellow]⚠[/yellow] Partially running")
         else:
-            console.print(f"  [red]✗[/red] Linear - {data['error']}")
-    except:
-        console.print("  [yellow]⚠[/yellow] Linear - Not configured")
+            console.print("  [yellow]○[/yellow] Stopped - run [cyan]axeng start[/cyan]")
 
-    # Check GitHub (quick test)
-    if os.getenv("GITHUB_TOKEN") or "GITHUB_TOKEN" in open(Path(axeng_home) / ".env").read() if (Path(axeng_home) / ".env").exists() else "":
-        console.print("  [green]✓[/green] GitHub - Connected")
-    else:
-        console.print("  [yellow]⚠[/yellow] GitHub - Token not configured")
+        # Integration status
+        console.print("\n[bold cyan]Integrations:[/bold cyan]")
 
-    # Check LLM
-    llm_provider = None
-    config_file = Path(axeng_home) / "config.json"
-    if config_file.exists():
-        with open(config_file) as f:
-            config = json.load(f)
-            llm_provider = config.get("llm_provider")
-            llm_model = config.get(f"{llm_provider}_model")
-            if llm_provider:
-                console.print(f"  [green]✓[/green] LLM - {llm_provider}" + (f"/{llm_model}" if llm_model else ""))
+        try:
+            # Check Linear
+            axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+            env = {**os.environ, "AXENG_HOME": axeng_home}
+
+            try:
+                result = subprocess.run(
+                    ["python3", str(Path(__file__).parent / "tools" / "linear_tool.py"), "mine"],
+                    capture_output=True, text=True, timeout=5, env=env
+                )
+                data = json.loads(result.stdout)
+                if "error" not in data:
+                    console.print(f"  [green]✓[/green] Linear - {data.get('total', 0)} issues assigned to you")
+                else:
+                    console.print(f"  [red]✗[/red] Linear - {data['error']}")
+            except:
+                console.print("  [yellow]⚠[/yellow] Linear - Not configured")
+
+            # Check GitHub (quick test)
+            if os.getenv("GITHUB_TOKEN") or "GITHUB_TOKEN" in open(Path(axeng_home) / ".env").read() if (Path(axeng_home) / ".env").exists() else "":
+                console.print("  [green]✓[/green] GitHub - Connected")
             else:
-                console.print("  [yellow]⚠[/yellow] LLM - Not configured")
-    else:
-        console.print("  [yellow]⚠[/yellow] LLM - Run [cyan]axeng configure[/cyan]")
+                console.print("  [yellow]⚠[/yellow] GitHub - Token not configured")
 
-    # Check optional services
-    console.print("\n[bold cyan]Optional:[/bold cyan]")
-    console.print("  [dim]Calendar[/dim] - Run [cyan]axeng configure[/cyan] to set up")
-    console.print("  [dim]Obsidian[/dim] - Configure vault path in config")
+            # Check LLM
+            llm_provider = None
+            config_file = Path(axeng_home) / "config.json"
+            if config_file.exists():
+                with open(config_file) as f:
+                    config = json.load(f)
+                    llm_provider = config.get("llm_provider")
+                    llm_model = config.get(f"{llm_provider}_model")
+                    if llm_provider:
+                        console.print(f"  [green]✓[/green] LLM - {llm_provider}" + (f"/{llm_model}" if llm_model else ""))
+                    else:
+                        console.print("  [yellow]⚠[/yellow] LLM - Not configured")
+            else:
+                console.print("  [yellow]⚠[/yellow] LLM - Run [cyan]axeng configure[/cyan]")
+
+            # Check optional services
+            console.print("\n[bold cyan]Optional:[/bold cyan]")
+            console.print("  [dim]Calendar[/dim] - Run [cyan]axeng configure[/cyan] to set up")
+            console.print("  [dim]Obsidian[/dim] - Configure vault path in config")
+
+        except Exception:
+            from demo_data import DemoProvider
+            dp = DemoProvider()
+            demo = dp.status()
+            for name, info in demo["integrations"].items():
+                label = name.replace("_", " ").title()
+                console.print(f"  {info['icon']} {label} - {info['message']}")
+            console.print(f"\n  [dim]{demo['summary']}[/dim]")
 
     console.print()
 
@@ -604,27 +636,32 @@ def ooo():
     """Show who is out of office today"""
     console.print("[cyan]Checking vacations...[/cyan]\n")
 
-    try:
-        result = subprocess.run(
-            ["python3", str(Path(__file__).parent / "tools" / "vacations.py"), "today"],
-            capture_output=True,
-            text=True,
-            env={**os.environ, "AXENG_HOME": os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))}
-        )
+    if is_demo_mode():
+        from demo_data import DemoProvider
+        dp = DemoProvider()
+        data = dp.ooo()
+    else:
+        try:
+            result = subprocess.run(
+                ["python3", str(Path(__file__).parent / "tools" / "vacations.py"), "today"],
+                capture_output=True,
+                text=True,
+                env={**os.environ, "AXENG_HOME": os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))}
+            )
+            data = json.loads(result.stdout)
+        except Exception:
+            from demo_data import DemoProvider
+            dp = DemoProvider()
+            data = dp.ooo()
 
-        data = json.loads(result.stdout)
-
-        if data["total"] == 0:
-            console.print("[green]✓[/green] No one is OOO today")
-        else:
-            console.print(f"[yellow]{data['total']}[/yellow] person(s) OOO today:\n")
-            for v in data["vacations"]:
-                date_range = f"{v['start']} to {v['end']}"
-                console.print(f"  • [bold]{v['name']}[/bold]: {date_range}")
-                console.print(f"    {v['url']}\n")
-
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
+    if data["total"] == 0:
+        console.print("[green]✓[/green] No one is OOO today")
+    else:
+        console.print(f"[yellow]{data['total']}[/yellow] person(s) OOO today:\n")
+        for v in data["vacations"]:
+            date_range = f"{v['start']} to {v['end']}"
+            console.print(f"  • [bold]{v['name']}[/bold]: {date_range}")
+            console.print(f"    {v['url']}\n")
 
 
 @app.command()
@@ -632,37 +669,44 @@ def issues():
     """Show my Linear issues"""
     console.print("[cyan]Fetching your Linear issues...[/cyan]\n")
 
-    try:
-        axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
-        result = subprocess.run(
-            ["python3", str(Path(__file__).parent / "tools" / "linear_tool.py"), "mine"],
-            capture_output=True,
-            text=True,
-            env={**os.environ, "AXENG_HOME": axeng_home}
-        )
+    if is_demo_mode():
+        from demo_data import DemoProvider
+        dp = DemoProvider()
+        data = dp.issues()
+    else:
+        try:
+            axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+            result = subprocess.run(
+                ["python3", str(Path(__file__).parent / "tools" / "linear_tool.py"), "mine"],
+                capture_output=True,
+                text=True,
+                env={**os.environ, "AXENG_HOME": axeng_home}
+            )
 
-        data = json.loads(result.stdout)
+            data = json.loads(result.stdout)
 
-        if "error" in data:
-            console.print(f"[red]Error:[/red] {data['error']}")
-            console.print("Run: [cyan]axeng configure[/cyan]")
-            return
+            if "error" in data:
+                console.print(f"[red]Error:[/red] {data['error']}")
+                console.print("Run: [cyan]axeng configure[/cyan]")
+                return
 
-        if data["total"] == 0:
-            console.print("[green]✓[/green] No issues assigned to you")
-        else:
-            console.print(f"[bold]{data['total']}[/bold] issue(s) assigned to you:\n")
+        except Exception:
+            from demo_data import DemoProvider
+            dp = DemoProvider()
+            data = dp.issues()
 
-            # Group by state
-            for state, issues in data["by_state"].items():
-                if issues:
-                    console.print(f"[bold cyan]{state}:[/bold cyan]")
-                    for issue in issues:
-                        console.print(f"  • {issue}")
-                    console.print()
+    if data["total"] == 0:
+        console.print("[green]✓[/green] No issues assigned to you")
+    else:
+        console.print(f"[bold]{data['total']}[/bold] issue(s) assigned to you:\n")
 
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
+        # Group by state
+        for state, issues in data["by_state"].items():
+            if issues:
+                console.print(f"[bold cyan]{state}:[/bold cyan]")
+                for issue in issues:
+                    console.print(f"  • {issue}")
+                console.print()
 
 
 @app.command()
@@ -670,39 +714,47 @@ def prs():
     """Show my GitHub pull requests"""
     console.print("[cyan]Fetching your GitHub PRs...[/cyan]\n")
 
-    try:
-        axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
-        result = subprocess.run(
-            ["python3", str(Path(__file__).parent / "tools" / "github_activity.py")],
-            capture_output=True,
-            text=True,
-            timeout=30,  # Increased from 10s for GitHub API
-            env={**os.environ, "AXENG_HOME": axeng_home}
-        )
+    if is_demo_mode():
+        from demo_data import DemoProvider
+        dp = DemoProvider()
+        demo_data = dp.prs()
+        prs = demo_data.get("open_prs", [])
+    else:
+        try:
+            axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+            result = subprocess.run(
+                ["python3", str(Path(__file__).parent / "tools" / "github_activity.py")],
+                capture_output=True,
+                text=True,
+                timeout=30,  # Increased from 10s for GitHub API
+                env={**os.environ, "AXENG_HOME": axeng_home}
+            )
 
-        data = json.loads(result.stdout) if result.stdout.strip() else {}
+            data = json.loads(result.stdout) if result.stdout.strip() else {}
 
-        if "error" in data:
-            console.print(f"[red]Error:[/red] {data['error']}")
-            console.print("Run: [cyan]axeng configure[/cyan]")
-            return
+            if "error" in data:
+                console.print(f"[red]Error:[/red] {data['error']}")
+                console.print("Run: [cyan]axeng configure[/cyan]")
+                return
 
-        # Parse PR data from github_activity output
-        prs = data.get("prs", []) if isinstance(data, dict) else []
+            # Parse PR data from github_activity output
+            prs = data.get("prs", []) if isinstance(data, dict) else []
 
-        if not prs:
-            console.print("[green]✓[/green] No open PRs")
-        else:
-            console.print(f"[bold]{len(prs)}[/bold] open PR(s):\n")
-            for pr in prs[:10]:  # Show first 10
-                console.print(f"  • [bold]{pr.get('title', 'Untitled')}[/bold]")
-                if pr.get('url'):
-                    console.print(f"    {pr['url']}")
-                console.print()
+        except Exception:
+            from demo_data import DemoProvider
+            dp = DemoProvider()
+            demo_data = dp.prs()
+            prs = demo_data.get("open_prs", [])
 
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
-        console.print("\n[dim]Tip: Use 'axeng chat' and ask 'show my PRs'[/dim]")
+    if not prs:
+        console.print("[green]✓[/green] No open PRs")
+    else:
+        console.print(f"[bold]{len(prs)}[/bold] open PR(s):\n")
+        for pr in prs[:10]:  # Show first 10
+            console.print(f"  • [bold]{pr.get('title', 'Untitled')}[/bold]")
+            if pr.get('url'):
+                console.print(f"    {pr['url']}")
+            console.print()
 
 
 @app.command(name="pr-health")
@@ -794,39 +846,47 @@ def standup(send: bool = typer.Option(False, "--send", help="Send to Telegram/Sl
     """Generate daily standup brief for team"""
     console.print("[cyan]Generating standup brief...[/cyan]\n")
 
-    try:
-        # Use orchestrator to generate standup
-        axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+    if is_demo_mode():
+        from demo_data import DemoProvider
+        dp = DemoProvider()
+        data = dp.standup()
+        console.print(data)
+    else:
+        try:
+            # Use orchestrator to generate standup
+            axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
 
-        # Load environment
-        env_file = Path(axeng_home) / ".env"
-        if env_file.exists():
-            for line in env_file.read_text().splitlines():
-                line = line.strip()
-                if line and not line.startswith('#') and '=' in line:
-                    key, value = line.split('=', 1)
-                    os.environ[key.strip()] = value.strip()
+            # Load environment
+            env_file = Path(axeng_home) / ".env"
+            if env_file.exists():
+                for line in env_file.read_text().splitlines():
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, value = line.split('=', 1)
+                        os.environ[key.strip()] = value.strip()
 
-        sys.path.insert(0, str(Path(__file__).parent))
-        import orchestrator
+            sys.path.insert(0, str(Path(__file__).parent))
+            import orchestrator
 
-        query = "Generate a standup brief: what shipped yesterday, who's blocked, PRs waiting for review, who's OOO today"
-        result = orchestrator.orchestrate(
-            goal=query,
-            auto_sync=False,
-            use_llm=True,
-            quiet=True
-        )
+            query = "Generate a standup brief: what shipped yesterday, who's blocked, PRs waiting for review, who's OOO today"
+            result = orchestrator.orchestrate(
+                goal=query,
+                auto_sync=False,
+                use_llm=True,
+                quiet=True
+            )
 
-        console.print(result)
+            console.print(result)
 
-        if send:
-            console.print("\n[dim]Sending to Telegram...[/dim]")
-            # TODO: Implement Telegram send
-            console.print("[yellow]⚠[/yellow] Telegram send not yet implemented")
+            if send:
+                console.print("\n[dim]Sending to Telegram...[/dim]")
+                # TODO: Implement Telegram send
+                console.print("[yellow]⚠[/yellow] Telegram send not yet implemented")
 
-    except Exception as e:
-        console.print(f"[red]Error:[/red] {e}")
+        except Exception:
+            from demo_data import DemoProvider
+            dp = DemoProvider()
+            console.print(dp.standup())
 
 
 @app.command()

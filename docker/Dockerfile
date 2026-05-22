@@ -18,12 +18,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source
-COPY src/ /app/src/
-COPY config/ /app/config/
+COPY axeng/ /app/axeng/
+COPY config/config.yaml.example /app/config/config.yaml
 COPY ui/ /app/ui/
 COPY bin/ /app/bin/
 
-ENV PYTHONPATH=/app/src
+ENV PYTHONPATH=/app/axeng
 ENV AXENG_HOME=/app
 
 EXPOSE 3457

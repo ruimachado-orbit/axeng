@@ -90,7 +90,7 @@ def github_graphql(query: str, variables: dict = None) -> dict:
         return {"data": None, "error": str(e)}
 
 # ── Log DB ─────────────────────────────────────────────────────────────────────
-LOGS_DB = Path.home() / ".hermes" / "axeng-logs.db"
+LOGS_DB = Path.home() / ".axeng" / "axeng-logs.db"
 
 def init_logs_db():
     """Create logs table if it doesn't exist."""
@@ -156,16 +156,16 @@ def seed_demo_logs():
     demos = [
         ("2026-05-10T09:42:00", "report", "success", "Gerou Standup Brief", "Enviado para Telegram · 7 membros · 3 issues pendentes", 2840, "standup-brief.py", "Telegram"),
         ("2026-05-10T09:38:15", "sync", "success", "Sincronizou Linear", "11 projetos · 38 issues abertas · 12 completadas", 800, "linear_query", None),
-        ("2026-05-10T09:30:00", "sync", "info", "Detetou OOO: João FCSantos", "Vacation label ativo no Linear · até 16 Mai", None, None, "João FCSantos"),
+        ("2026-05-10T09:30:00", "sync", "info", "Detetou OOO: Alice Dev", "Vacation label ativo no Linear · até 16 Mai", None, None, "Alice Dev"),
         ("2026-05-10T09:15:30", "delivery", "success", "Briefing enviado", "Telegram · User · 3 action items", 520, None, "Telegram:7910783991"),
         ("2026-05-10T08:55:00", "review", "info", "Reviu PR #847", "orbit-health · approved", 1200, None, "Orbit-Verticals/orbit-health#847"),
         ("2026-05-10T08:42:10", "tool_call", "info", "Buscou contributors", "Orbit-Verticals/repos", 600, "gh api repos", None),
         ("2026-05-10T08:30:00", "sync", "success", "Team Intel Daily Sync", "Sincronizado · 0 mudanças", 1200, "team_intel.py", None),
-        ("2026-05-09T17:00:00", "report", "success", "Weekly Team Report enviado", "23 tasks completadas · 5 blockers", 5400, "weekly-report.py", "Diogo,Pedro,Daniel,Luis,João,Anastasiia"),
+        ("2026-05-09T17:00:00", "report", "success", "Weekly Team Report enviado", "23 tasks completadas · 5 blockers", 5400, "weekly-report.py", "Alice,Bob,Carol,Dave"),
         ("2026-05-09T16:00:00", "report", "success", "Sprint Health gerado", "11 projetos · score médio 78/100", 3200, "sprint-health.py", None),
         ("2026-05-09T16:00:00", "report", "success", "Risk Radar executado", "0 blockers críticos · 2 warnings", 2100, "risk-radar.py", None),
         ("2026-05-09T09:30:00", "decision", "info", "Priorizou issues Phoenix", "Score caiu 78→64", None, None, "Phoenix"),
-        ("2026-05-09T08:55:00", "review", "warning", "PR #844 pendiente >48h", "jfcsantos · sem reviews", None, None, "Orbit-Verticals/orbit-health#844"),
+        ("2026-05-09T08:55:00", "review", "warning", "PR #844 pendiente >48h", "alice-dev · sem reviews", None, None, "Orbit-Verticals/orbit-health#844"),
         ("2026-05-08T17:00:00", "report", "success", "Weekly Team Report enviado", "19 tasks · 2 blockers", 4800, "weekly-report.py", "Equipa"),
     ]
     conn = sqlite3.connect(LOGS_DB)

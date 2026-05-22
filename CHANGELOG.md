@@ -1,5 +1,24 @@
 # Axeng Changelog
 
+## [2.3.0] - 2026-05-22
+
+### Changed
+- **Open-source readiness** — complete security and stability audit
+  - All sensitive data purged from git history (3 passes of git-filter-repo, 95 commits rewritten)
+  - Hardcoded PII (emails, names, phone numbers, UUIDs) removed from all source files
+  - `~/.hermes` defaults migrated to `~/.axeng` (configurable via `HERMES_HOME` env var)
+  - Hardcoded team names, org names, and project references replaced with config-driven or generic values
+- **Docker setup** — fixed bash scripts path resolution (`../..` → `..`), created `docker/Dockerfile`, updated compose file references
+- **System prompt** — parameterized to use "you" instead of hardcoded "Rui"
+
+### Added
+- `config.yaml.example` now includes `vacations.project_id` field
+- Docker image with FastAPI API server (7 endpoints)
+
+### Removed
+- Stale build artifacts (`.next/`, `out-website/`, `.pytest_cache/`)
+- Hardcoded team member data from UI mock data and test files
+
 ## [2.2.2] - 2026-05-12
 
 ### Added

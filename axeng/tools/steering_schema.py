@@ -120,6 +120,7 @@ class ProjectCard:
     target_date: str | None = None       # ISO date
     start_date: str | None = None        # ISO date
     days_left: int | None = None
+    milestones: list[dict] = field(default_factory=list)  # [{name, target_date}]
     time_progress_pct: float = 0.0       # % of calendar time elapsed
     work_progress_pct: float = 0.0       # % of issues completed
     timeline_position: TimelinePosition = "on_plan"

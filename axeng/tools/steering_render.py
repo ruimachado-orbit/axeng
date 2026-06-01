@@ -280,6 +280,14 @@ def _html_project_card(p: dict, sp_trend: str, t: dict) -> str:
     if target and days_left is not None:
         target_str += f" ({days_left}d left)"
 
+    # Milestones — show next upcoming one
+    milestones = p.get("milestones") or []
+    from datetime import date as _date
+    today_str = _date.today().isoformat()
+    upcoming = [m for m in milestones if m.get("target_date", "") >= today_str]
+    upcoming.sort(key=lambda m: m.get("target_date", ""))
+    next_milestone = upcoming[0] if upcoming else None
+
     # Header
     html = (
         f'<tr><td style="padding:0 0 10px;">'
@@ -310,7 +318,12 @@ def _html_project_card(p: dict, sp_trend: str, t: dict) -> str:
         f' &nbsp;/&nbsp; {time_pct}% elapsed'
         f' &nbsp;·&nbsp; ETA: <span style="color:{_eta_color(eta, t)};font-weight:600;">'
         f'{_eta_label(eta)}</span>{vel_html}</td>'
-        f'<td align="right">{target_str}</td>'
+        f'<td align="right">{target_str}'
+        + (
+            f'<br><span style="color:{t["ACCENT"]};font-size:10px;">▸ {next_milestone["name"]} · {next_milestone["target_date"]}</span>'
+            if next_milestone else ""
+        )
+        + f'</td>'
         f'</tr></table></td></tr>'
     )
 
@@ -577,6 +590,12 @@ def render_markdown(report: SteeringReport) -> str:
             + (f" · target {p.target_date}" if p.target_date else "")
         )
         lines.append(f"**ETA:** {p.eta_risk.upper()} · **Score:** {int(p.health_score)}/100")
+        if p.milestones:
+            today_str = str(__import__('datetime').date.today())
+            upcoming = sorted([m for m in p.milestones if m.get("target_date","") >= today_str], key=lambda m: m.get("target_date",""))
+            if upcoming:
+                m = upcoming[0]
+                lines.append(f"**Next milestone:** {m['name']} — {m['target_date']}")
         lines.append("")
         if p.blockers:
             lines.append("**Blockers:**")

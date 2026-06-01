@@ -367,6 +367,9 @@ def linear_project_health(days: int = 30) -> dict:
           id name state
           lead { name email }
           targetDate startDate
+          milestones {
+            nodes { name targetDate description }
+          }
           issues {
             nodes {
               identifier title state { name type }
@@ -460,13 +463,20 @@ def linear_project_health(days: int = 30) -> dict:
         if velocity < 0.5:
             risks.append("Low velocity - less than 0.5 issues/day")
 
+        raw_milestones = (project.get("milestones") or {}).get("nodes", [])
+        milestones = [
+            {"name": m.get("name"), "target_date": m.get("targetDate")}
+            for m in raw_milestones if m.get("targetDate")
+        ]
+
         project_data = {
             "name": project.get("name"),
             "id": project.get("id"),
             "state": project.get("state"),
-            "lead": project.get("lead", {}).get("name", "Unassigned"),
+            "lead": (project.get("lead") or {}).get("name", "Unassigned"),
             "target_date": project.get("targetDate"),
             "start_date": project.get("startDate"),
+            "milestones": milestones,
             "metrics": {
                 "total_issues": total_issues,
                 "completed": len(completed),

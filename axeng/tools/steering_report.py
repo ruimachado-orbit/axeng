@@ -463,6 +463,7 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
             target_date=target_date,
             start_date=start_date,
             days_left=tl["days_left"],
+            milestones=lin_data.get("milestones", []),
             time_progress_pct=time_pct,
             work_progress_pct=work_pct,
             timeline_position=tl["timeline_position"],

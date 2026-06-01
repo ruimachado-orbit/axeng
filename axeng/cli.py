@@ -1221,7 +1221,10 @@ def _run_steering_report(
             return
 
         if send:
-            console.print("\n[green]✓[/green] Steering report sent to recipients.")
+            if result.returncode == 0:
+                console.print("\n[green]✓[/green] Steering report sent to recipients.")
+            else:
+                console.print("\n[yellow]⚠[/yellow] Report saved but delivery failed — check configuration.")
         else:
             output_dir = Path(os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))) / "reports" / "steering"
             console.print(f"\n[green]✓[/green] Report saved to {output_dir}")

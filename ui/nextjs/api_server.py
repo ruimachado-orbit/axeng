@@ -314,6 +314,54 @@ def logs(
 ):
     return {"logs": get_logs(limit, log_type), "total": len(get_logs(500))}
 
+@app.get("/api/reports/steering")
+def steering_reports_list():
+    """List all generated CEO steering reports (newest first)."""
+    output_dir = Path.home() / ".axeng" / "reports" / "steering"
+    index_path = output_dir / "index.json"
+    if not index_path.exists():
+        return {"reports": [], "count": 0}
+    try:
+        index = json.loads(index_path.read_text())
+        return {"reports": index, "count": len(index)}
+    except Exception as e:
+        return {"reports": [], "count": 0, "error": str(e)}
+
+
+@app.get("/api/reports/steering/latest")
+def steering_report_latest():
+    """Return the most recently generated CEO steering report."""
+    import re
+    output_dir = Path.home() / ".axeng" / "reports" / "steering"
+    index_path = output_dir / "index.json"
+    if not index_path.exists():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="No steering reports found")
+    index = json.loads(index_path.read_text())
+    if not index:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail="No steering reports found")
+    report_path = output_dir / f"{index[0]['id']}.json"
+    if not report_path.exists():
+        from fastapi import HTTPException
+        raise HTTPException(status_code=404, detail=f"Report file missing: {index[0]['id']}.json")
+    return json.loads(report_path.read_text())
+
+
+@app.get("/api/reports/steering/{report_id}")
+def steering_report_by_id(report_id: str):
+    """Return a specific CEO steering report by ID e.g. steering-2026-05-30."""
+    import re
+    from fastapi import HTTPException
+    if not re.fullmatch(r"steering-\d{4}-\d{2}-\d{2}", report_id):
+        raise HTTPException(status_code=400, detail="Invalid report ID format")
+    output_dir = Path.home() / ".axeng" / "reports" / "steering"
+    report_path = output_dir / f"{report_id}.json"
+    if not report_path.exists():
+        raise HTTPException(status_code=404, detail=f"Report not found: {report_id}")
+    return json.loads(report_path.read_text())
+
+
 @app.get("/api/reports")
 def reports():
     """Return report history from stored JSON files."""

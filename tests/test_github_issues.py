@@ -195,25 +195,23 @@ def test_risk_score_bounded():
 # ── GraphQL payload parsing ──────────────────────────────────────────────────
 
 def test_fetch_org_issues_parses_graphql_response(monkeypatch):
+    issue = {
+        "number": 42,
+        "title": "Fix login",
+        "updatedAt": datetime.now(timezone.utc).isoformat(),
+        "createdAt": datetime.now(timezone.utc).isoformat(),
+        "assignees": {"nodes": [{"login": "alice"}]},
+        "milestone": None,
+        "body": "",
+        "comments": {"nodes": []},
+        "labels": {"nodes": []},
+    }
     fake_response = {
         "data": {
             "r0": {
                 "nameWithOwner": "myorg/frontend",
-                "issues": {
-                    "nodes": [
-                        {
-                            "number": 42,
-                            "title": "Fix login",
-                            "updatedAt": datetime.now(timezone.utc).isoformat(),
-                            "createdAt": datetime.now(timezone.utc).isoformat(),
-                            "assignees": {"nodes": [{"login": "alice"}]},
-                            "milestone": None,
-                            "body": "",
-                            "comments": {"nodes": []},
-                            "labels": {"nodes": []},
-                        }
-                    ]
-                },
+                "open":   {"nodes": [issue]},
+                "closed": {"nodes": []},
             }
         }
     }
@@ -222,5 +220,7 @@ def test_fetch_org_issues_parses_graphql_response(monkeypatch):
 
     result = _gi._fetch_org_issues("myorg", ["frontend"])
     assert "myorg/frontend" in result
-    assert len(result["myorg/frontend"]) == 1
-    assert result["myorg/frontend"][0]["number"] == 42
+    repo = result["myorg/frontend"]
+    assert len(repo["open"]) == 1
+    assert repo["open"][0]["number"] == 42
+    assert repo["closed"] == []

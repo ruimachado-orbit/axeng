@@ -313,10 +313,12 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
     print("  🃏 Building project cards...", file=sys.stderr)
     project_cards: list[ProjectCard] = []
 
-    # Use map as source of truth for configured projects
-    configured_projects = list(linear_github_map.keys()) if linear_github_map else [
-        p["name"] for p in linear_projects
-    ]
+    # Union of mapped projects + any Linear projects not yet in the map.
+    # Mapped projects come first (they have repo/owner metadata); unmapped are
+    # appended so they still appear in the report with a warning in evidence.
+    mapped_names = set(linear_github_map.keys())
+    unmapped_names = [p["name"] for p in linear_projects if p["name"] not in mapped_names]
+    configured_projects = list(linear_github_map.keys()) + unmapped_names
 
     for proj_name in configured_projects:
         map_entry = linear_github_map.get(proj_name, {})
@@ -394,7 +396,7 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
     cross_project_signals: list[dict] = []
     try:
         project_cards, cross_project_signals = enrich_with_granola(
-            project_cards, week_start.isoformat()
+            project_cards, week_start.isoformat(), week_end.isoformat()
         )
         sources.append("granola")
     except Exception as e:
@@ -562,12 +564,14 @@ def _update_index(output_dir: Path, report: SteeringReport) -> None:
 def send_report(report: SteeringReport, paths: dict[str, Path]) -> bool:
     """
     Send the report via configured channel.
-    Tries Gmail (HTML email) first, falls back to Telegram (Markdown excerpt).
-    Never raises — failures are logged and return False.
+    Tries Gmail (HTML email) first, then Telegram.
+    Returns True only if at least one delivery actually succeeded.
+    Never raises — failures are printed to stderr.
     """
     import os, subprocess
 
     recipients: list = cfg_get("steering.recipients", [])
+    any_sent = False
 
     # ── Gmail HTML email ────────────────────────────────────────────────────
     html_path = paths.get("html")
@@ -577,7 +581,9 @@ def send_report(report: SteeringReport, paths: dict[str, Path]) -> bool:
             "~/.axeng/skills/productivity/google-workspace/scripts/google_api.py"
         )
         gmail_path = Path(gmail_script).expanduser()
-        if gmail_path.exists():
+        if not gmail_path.exists():
+            print(f"⚠️  Gmail script not found at {gmail_path} — skipping email", file=sys.stderr)
+        else:
             subject = f"Engineering Update — {report.week_end}"
             for recipient in recipients:
                 try:
@@ -593,10 +599,11 @@ def send_report(report: SteeringReport, paths: dict[str, Path]) -> bool:
                     )
                     if result.returncode == 0:
                         print(f"✉️  Sent to {recipient}", file=sys.stderr)
+                        any_sent = True
                     else:
                         print(f"⚠️  Gmail send failed for {recipient}: {result.stderr[:200]}", file=sys.stderr)
                 except Exception as e:
-                    print(f"⚠️  Gmail error: {e}", file=sys.stderr)
+                    print(f"⚠️  Gmail error for {recipient}: {e}", file=sys.stderr)
 
     # ── Telegram Markdown fallback ──────────────────────────────────────────
     token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -616,11 +623,20 @@ def send_report(report: SteeringReport, paths: dict[str, Path]) -> bool:
             )
             if result.returncode == 0:
                 print("📨 Sent via Telegram", file=sys.stderr)
-                return True
+                any_sent = True
+            else:
+                print(f"⚠️  Telegram send failed: {result.stderr[:200]}", file=sys.stderr)
         except Exception as e:
             print(f"⚠️  Telegram error: {e}", file=sys.stderr)
 
-    return bool(html_path and recipients)
+    if not any_sent:
+        if not recipients and not (os.getenv("TELEGRAM_BOT_TOKEN")):
+            print("⚠️  No delivery channels configured — set steering.recipients or TELEGRAM_BOT_TOKEN",
+                  file=sys.stderr)
+        else:
+            print("⚠️  All delivery attempts failed — report saved locally only", file=sys.stderr)
+
+    return any_sent
 
 
 # ── CLI entry ────────────────────────────────────────────────────────────────
@@ -639,7 +655,9 @@ if __name__ == "__main__":
     paths = save_report(report)
 
     if args.send:
-        send_report(report, paths)
+        delivered = send_report(report, paths)
+        if not delivered:
+            sys.exit(1)   # non-zero so CLI caller can detect failure
 
     if args.json:
         print(json.dumps(report_to_dict(report), indent=2, default=str))

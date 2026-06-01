@@ -80,7 +80,7 @@ def _gh_rest_issues(repo: str, state: str = "open", per_page: int = 100) -> list
 _REPO_ISSUES_FRAGMENT = """
 fragment repoIssues on Repository {
   nameWithOwner
-  issues(states: OPEN, first: 100, orderBy: {field: UPDATED_AT, direction: ASC}) {
+  open: issues(states: OPEN, first: 100, orderBy: {field: UPDATED_AT, direction: ASC}) {
     nodes {
       number
       title
@@ -93,14 +93,20 @@ fragment repoIssues on Repository {
       comments(last: 3) { nodes { body } }
     }
   }
+  closed: issues(states: CLOSED, first: 50, orderBy: {field: UPDATED_AT, direction: DESC}) {
+    nodes {
+      number
+      closedAt
+    }
+  }
 }
 """
 
 
 def _fetch_org_issues(org: str, repo_names: list[str]) -> dict[str, list[dict]]:
     """
-    Batch-fetch open issues for up to 20 repos in one GraphQL query.
-    Returns {full_repo_name: [issue, ...]}
+    Batch-fetch open + recently closed issues for up to 20 repos in one GraphQL query.
+    Returns {full_repo_name: {"open": [...], "closed": [...]}}
     """
     if not repo_names:
         return {}
@@ -123,23 +129,25 @@ def _fetch_org_issues(org: str, repo_names: list[str]) -> dict[str, list[dict]]:
         return {}
 
     data = result.get("data", {})
-    out: dict[str, list[dict]] = {}
+    out: dict[str, dict] = {}
     for i, name in enumerate(repo_names[:20]):
         alias = f"r{i}"
         repo_data = data.get(alias) or {}
-        issues = (repo_data.get("issues") or {}).get("nodes") or []
         full_name = f"{org}/{name}"
-        out[full_name] = issues
+        out[full_name] = {
+            "open": (repo_data.get("open") or {}).get("nodes") or [],
+            "closed": (repo_data.get("closed") or {}).get("nodes") or [],
+        }
 
     return out
 
 
-def fetch_raw_issues(repos: list[str]) -> dict[str, list[dict]]:
+def fetch_raw_issues(repos: list[str]) -> dict[str, dict]:
     """
-    Fetch open issues for all repos, grouped by full repo name.
+    Fetch open + recently closed issues for all repos, grouped by full repo name.
+    Returns {repo: {"open": [...], "closed": [...]}}
     Groups by org, batch-queries per org, falls back to REST per repo on failure.
     """
-    # Group repos by org
     by_org: dict[str, list[str]] = {}
     for repo in repos:
         if "/" not in repo:
@@ -147,17 +155,20 @@ def fetch_raw_issues(repos: list[str]) -> dict[str, list[dict]]:
         org, name = repo.split("/", 1)
         by_org.setdefault(org, []).append(name)
 
-    all_issues: dict[str, list[dict]] = {}
+    all_issues: dict[str, dict] = {}
 
     for org, names in by_org.items():
         batch = _fetch_org_issues(org, names)
         if batch:
             all_issues.update(batch)
         else:
-            # GraphQL failed — fall back to REST per repo
+            # GraphQL failed — fall back to REST per repo (open issues only)
             for name in names:
                 full = f"{org}/{name}"
-                all_issues[full] = _gh_rest_issues(full)
+                all_issues[full] = {
+                    "open": _gh_rest_issues(full, state="open"),
+                    "closed": _gh_rest_issues(full, state="closed", per_page=30),
+                }
 
     return all_issues
 
@@ -240,12 +251,13 @@ def _issue_label(issue: dict, repo: str) -> str:
 
 def compute_issue_signals(
     project_repos: list[str],
-    raw_issues: dict[str, list[dict]],
+    raw_issues: dict[str, dict],
     week_start: str,
     target_date: str | None = None,
 ) -> tuple[IssueSignals, list[Evidence]]:
     """
     Aggregate raw issues for a project's repos into an IssueSignals object.
+    raw_issues shape: {repo: {"open": [...], "closed": [...]}}
     Also returns a list of Evidence items for traceability.
     """
     from tools.steering_schema import Evidence
@@ -258,11 +270,18 @@ def compute_issue_signals(
     overdue: list[str] = []
     blocked: list[str] = []
     created_this_week = 0
-    closed_this_week = 0   # approximated via REST closed issues
+    closed_this_week = 0
 
     for repo in project_repos:
-        issues = raw_issues.get(repo, [])
-        for issue in issues:
+        repo_data = raw_issues.get(repo, {})
+        # Support both new dict shape and legacy flat list (REST fallback)
+        if isinstance(repo_data, list):
+            open_issues, closed_issues = repo_data, []
+        else:
+            open_issues = repo_data.get("open", [])
+            closed_issues = repo_data.get("closed", [])
+
+        for issue in open_issues:
             label = _issue_label(issue, repo)
 
             if _is_stale(issue, stale_cutoff):
@@ -274,7 +293,6 @@ def compute_issue_signals(
             if _is_blocked(issue):
                 blocked.append(label)
 
-            # Created this week
             created = issue.get("createdAt") or issue.get("created_at", "")
             if created:
                 try:
@@ -283,16 +301,26 @@ def compute_issue_signals(
                 except ValueError:
                     pass
 
-    backlog_growth = max(0, created_this_week - closed_this_week)
+        # Count issues actually closed this week
+        for issue in closed_issues:
+            closed_at = issue.get("closedAt") or issue.get("closed_at", "")
+            if closed_at:
+                try:
+                    if datetime.fromisoformat(closed_at.replace("Z", "+00:00")) >= week_start_dt:
+                        closed_this_week += 1
+                except ValueError:
+                    pass
 
-    # Risk score: weighted sum, 0–100
+    backlog_growth = created_this_week - closed_this_week  # can be negative = backlog shrinking
+
+    # Risk score: weighted sum, 0–100. Only penalise positive backlog growth.
     risk_score = min(
         100,
         len(stale) * 3 +
         len(unowned) * 4 +
         len(overdue) * 8 +
         len(blocked) * 10 +
-        backlog_growth * 2,
+        max(0, backlog_growth) * 2,
     )
 
     signals = IssueSignals(
@@ -361,9 +389,9 @@ def enrich_with_issue_signals(
 
         # Week delta string
         if signals.backlog_growth > 0:
-            card.week_delta = (
-                f"Backlog growing: +{signals.backlog_growth} net new issues this week"
-            )
+            card.week_delta = f"Backlog growing: +{signals.backlog_growth} net new issues this week"
+        elif signals.backlog_growth < 0:
+            card.week_delta = f"Backlog shrinking: {abs(signals.backlog_growth)} more closed than opened this week"
         elif signals.stale_count > 5:
             card.week_delta = f"{signals.stale_count} issues stale ({STALE_DAYS}+ days without update)"
 

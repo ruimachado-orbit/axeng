@@ -187,19 +187,39 @@ def _note_to_transcript_signal(note_id: str, note_meta: dict, extracted: dict) -
 
 # ── Main enrichment ──────────────────────────────────────────────────────────
 
-def enrich_with_granola(project_cards: list, week_start: str) -> tuple[list, list[dict]]:
+def enrich_with_granola(
+    project_cards: list,
+    week_start: str,
+    week_end: str | None = None,
+) -> tuple[list, list[dict]]:
     """
-    Fetch Granola notes from the last 7 days, attribute them to projects,
-    extract signals, and attach TranscriptSignals to each ProjectCard.
+    Fetch Granola notes that fall within [week_start, week_end], attribute them
+    to projects, extract signals, and attach TranscriptSignals to each ProjectCard.
+
+    week_end defaults to today so live runs work without an argument.
+    Passing week_end explicitly ensures historical regeneration fetches the
+    right meetings instead of always analysing the current week.
 
     Returns (enriched project_cards, cross_project_signals).
     cross_project_signals: notes that couldn't be attributed to any project.
     """
+    from datetime import date, timedelta
+
     cross_project: list[dict] = []
 
-    print("  📓 Fetching Granola meeting notes...", file=sys.stderr)
+    # Compute how many days back week_start is from week_end (or today)
     try:
-        notes_result = list_notes(days=7, limit=30)
+        end_date = date.fromisoformat(week_end) if week_end else date.today()
+        start_date = date.fromisoformat(week_start)
+        days_back = (end_date - start_date).days + 1   # inclusive
+        days_back = max(days_back, 1)
+    except (ValueError, TypeError):
+        days_back = 7
+
+    print(f"  📓 Fetching Granola meeting notes ({week_start} → {week_end or 'today'})...",
+          file=sys.stderr)
+    try:
+        notes_result = list_notes(days=days_back, limit=50)
     except Exception as e:
         print(f"  ⚠️  Granola unavailable: {e}", file=sys.stderr)
         return project_cards, cross_project
@@ -210,8 +230,33 @@ def enrich_with_granola(project_cards: list, week_start: str) -> tuple[list, lis
         return project_cards, cross_project
 
     notes = notes_result.get("notes", [])
+
+    # Filter to notes actually within the reporting window
+    if week_end:
+        try:
+            end_dt_str = week_end + "T23:59:59+00:00"
+            start_dt_str = week_start + "T00:00:00+00:00"
+            from datetime import datetime, timezone
+            start_dt = datetime.fromisoformat(start_dt_str)
+            end_dt = datetime.fromisoformat(end_dt_str)
+            filtered = []
+            for n in notes:
+                created = n.get("createdAt") or n.get("created_at") or n.get("updatedAt") or ""
+                if not created:
+                    filtered.append(n)  # no date — include conservatively
+                    continue
+                try:
+                    note_dt = datetime.fromisoformat(created.replace("Z", "+00:00"))
+                    if start_dt <= note_dt <= end_dt:
+                        filtered.append(n)
+                except ValueError:
+                    filtered.append(n)
+            notes = filtered
+        except Exception:
+            pass  # date filter failed — use all notes
+
     if not notes:
-        print("  ℹ️  No Granola notes found for the last 7 days", file=sys.stderr)
+        print("  ℹ️  No Granola notes found for the reporting window", file=sys.stderr)
         return project_cards, cross_project
 
     project_names = [c.name for c in project_cards]

@@ -152,7 +152,6 @@ def test_score_on_track_project():
         sr = _load("steering_report", _ROOT / "tools" / "steering_report.py")
 
     schema = _load("steering_schema", _ROOT / "tools" / "steering_schema.py")
-    # High completion, low staleness, strong velocity, minimal issue risk
     linear = schema.LinearSignals(completion_rate=85, staleness_rate=5, velocity=2.0)
     issues = schema.IssueSignals(risk_score=5)
     score, confidence, status, forecast = sr._score_project(linear, issues, 60, 85, [])
@@ -177,9 +176,86 @@ def test_score_urgent_transcript_caps_status():
         confidence_tone="urgent"
     )
     score, confidence, status, forecast = sr._score_project(linear, issues, 50, 80, [urgent])
-    # Despite good Linear health, urgent tone should cap at at_risk
     assert status in ("at_risk", "off_track")
     assert score <= 59
+
+
+def test_score_declining_velocity_nudges_down():
+    with patch.dict("sys.modules", {
+        "tools.github_issues": MagicMock(),
+        "tools.steering_granola": MagicMock(),
+        "tools.steering_render": MagicMock(),
+    }):
+        sr = _load("steering_report", _ROOT / "tools" / "steering_report.py")
+
+    schema = _load("steering_schema", _ROOT / "tools" / "steering_schema.py")
+    linear = schema.LinearSignals(completion_rate=80, staleness_rate=10, velocity=1.5)
+    issues = schema.IssueSignals(risk_score=10)
+
+    score_stable, _, _, _ = sr._score_project(linear, issues, 55, 78, [], velocity_trend="stable")
+    score_declining, _, _, _ = sr._score_project(linear, issues, 55, 78, [], velocity_trend="declining")
+    score_improving, _, _, _ = sr._score_project(linear, issues, 55, 78, [], velocity_trend="improving")
+
+    assert score_declining < score_stable
+    assert score_improving > score_stable
+    assert score_declining == score_stable - 8
+    assert score_improving == score_stable + 5
+
+
+def test_score_declining_velocity_can_flip_status():
+    """A borderline on_track project should drop to at_risk if velocity is declining."""
+    with patch.dict("sys.modules", {
+        "tools.github_issues": MagicMock(),
+        "tools.steering_granola": MagicMock(),
+        "tools.steering_render": MagicMock(),
+    }):
+        sr = _load("steering_report", _ROOT / "tools" / "steering_report.py")
+
+    schema = _load("steering_schema", _ROOT / "tools" / "steering_schema.py")
+    # Inputs that produce a score just above 75 with stable velocity
+    linear = schema.LinearSignals(completion_rate=84, staleness_rate=8, velocity=1.5)
+    issues = schema.IssueSignals(risk_score=5)
+
+    score_stable, _, status_stable, _ = sr._score_project(linear, issues, 55, 80, [], velocity_trend="stable")
+    score_declining, _, status_declining, _ = sr._score_project(linear, issues, 55, 80, [], velocity_trend="declining")
+
+    # Verify the stable score is actually above the threshold before asserting status
+    assert score_stable >= 75, f"Test setup issue: stable score {score_stable} < 75"
+    assert score_declining < score_stable
+
+    assert status_stable == "on_track"
+    assert status_declining == "at_risk"
+
+
+# ── SprintSignals schema ──────────────────────────────────────────────────────
+
+def test_sprint_signals_defaults():
+    schema = _load("steering_schema", _ROOT / "tools" / "steering_schema.py")
+    sp = schema.SprintSignals()
+    assert sp.velocity_trend == "stable"
+    assert sp.velocity_avg == 0.0
+    assert sp.sprint_status == "unknown"
+
+
+def test_sprint_signals_in_report_dict():
+    schema = _load("steering_schema", _ROOT / "tools" / "steering_schema.py")
+    sp = schema.SprintSignals(
+        sprint_name="Sprint 42",
+        velocity_trend="declining",
+        velocity_avg=1.8,
+        cycles_analyzed=5,
+    )
+    report = schema.SteeringReport(
+        report_id="steering-2026-05-30",
+        generated_at="2026-05-30T08:00:00",
+        week_start="2026-05-26",
+        week_end="2026-05-30",
+        sprint_signals=sp,
+    )
+    d = schema.report_to_dict(report)
+    assert d["sprint_signals"]["sprint_name"] == "Sprint 42"
+    assert d["sprint_signals"]["velocity_trend"] == "declining"
+    assert d["sprint_signals"]["velocity_avg"] == 1.8
 
 
 def test_score_missing_owner_triggers_unowned_forecast():

@@ -118,6 +118,27 @@ def render_markdown(report: SteeringReport) -> str:
     lines.append(f"> **{s.top_risk}**")
     lines.append("")
 
+    # Sprint pulse
+    sp = report.sprint_signals
+    if sp and sp.sprint_name:
+        trend_icon = {"declining": "↓", "improving": "↑", "stable": "→"}.get(
+            sp.velocity_trend, "—"
+        )
+        trend_label = sp.velocity_trend.replace("_", " ").title()
+        days_left_str = f" · {sp.days_remaining_in_sprint}d left" if sp.days_remaining_in_sprint is not None else ""
+        lines.append("## Sprint Pulse")
+        lines.append("")
+        lines.append(
+            f"**{sp.sprint_name}**{days_left_str} · "
+            f"{int(sp.sprint_completion_rate)}% done / {int(sp.sprint_time_progress)}% elapsed · "
+            f"{sp.sprint_status.replace('_', ' ').title()}"
+        )
+        lines.append(
+            f"Team velocity: **{sp.velocity_avg} pts/day** avg (last {sp.cycles_analyzed} sprints) "
+            f"{trend_icon} {trend_label}"
+        )
+        lines.append("")
+
     # Decisions
     if report.decisions_needed:
         lines.append(f"## Decisions Needed ({len(report.decisions_needed)})")

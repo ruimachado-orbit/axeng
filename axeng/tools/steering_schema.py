@@ -57,8 +57,23 @@ class IssueSignals:
 # ── Linear ───────────────────────────────────────────────────────────────────
 
 @dataclass
+class SprintSignals:
+    """Current sprint position — cadence differs from weekly steering (2-week sprint vs weekly report)."""
+    sprint_name: str | None = None
+    sprint_ends_at: str | None = None          # ISO datetime
+    days_remaining_in_sprint: int | None = None
+    sprint_completion_rate: float = 0.0        # % of sprint issues done
+    sprint_time_progress: float = 0.0          # % of sprint calendar elapsed
+    sprint_status: str = "unknown"             # on_track / at_risk / off_track / unknown
+    velocity_trend: str = "stable"             # improving / stable / declining / insufficient_data
+    velocity_avg: float = 0.0                  # pts/day, avg last 5 sprints
+    velocity_current: float = 0.0             # pts/day, current sprint
+    cycles_analyzed: int = 0
+
+
+@dataclass
 class LinearSignals:
-    completion_rate: float = 0.0  # 0–100
+    completion_rate: float = 0.0  # 0–100 project-level
     staleness_rate: float = 0.0   # 0–100
     velocity: float = 0.0         # issues/day
     in_progress: int = 0
@@ -151,6 +166,8 @@ class SteeringReport:
     decisions_needed: list[dict] = field(default_factory=list)   # [{project, text, action}]
     cross_project_risks: list[str] = field(default_factory=list)
     capacity_signals: CapacitySignals = field(default_factory=CapacitySignals)
+
+    sprint_signals: SprintSignals = field(default_factory=SprintSignals)
 
     sources: list[str] = field(default_factory=list)  # which signals were available
     errors: list[str] = field(default_factory=list)   # non-fatal collection failures

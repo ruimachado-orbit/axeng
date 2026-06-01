@@ -19,12 +19,16 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 from config import get as cfg_get
 from project_map import build_maps, all_repos, owner_of_project, repos_for_project
 from tools.linear_tool import linear_project_health
-from tools.sprint_health import predict_sprint_completion, calculate_sprint_metrics
+from tools.sprint_health import (
+    predict_sprint_completion, calculate_sprint_metrics,
+    sprint_health, sprint_velocity,
+)
 from tools.vacations import who_is_ooo_today
 from tools.github_issues import enrich_with_issue_signals
 from tools.steering_granola import enrich_with_granola
 from tools.steering_render import render_html, render_markdown
 from tools.steering_schema import (
+    SprintSignals,
     CapacitySignals,
     Confidence,
     Evidence,
@@ -143,11 +147,15 @@ def _score_project(
     time_pct: float,
     work_pct: float,
     transcript_signals: list[TranscriptSignal],
+    velocity_trend: str = "stable",
 ) -> tuple[float, Confidence, Status, Forecast]:
     """
     Weighted score using raw signals (not the derived Linear health score).
     Weights: Linear delivery 35% | timeline alignment 25% | issue risk 20% |
              transcript 15% | staleness penalty 5%
+    velocity_trend is a team-wide modifier: declining nudges score down,
+    improving nudges it up — labelled in evidence so it's not misread as
+    project-specific.
     Returns (health_score, confidence, status, forecast).
     """
     # Linear delivery component — raw completion + velocity
@@ -178,6 +186,12 @@ def _score_project(
         issue_score * 0.20 +
         staleness_score * 0.05
     )
+
+    # Velocity trend modifier (team-wide signal — applied before capping)
+    if velocity_trend == "declining":
+        health_score = max(0, health_score - 8)
+    elif velocity_trend == "improving":
+        health_score = min(100, health_score + 5)
 
     # Transcript modifier — urgent tone caps status at at_risk regardless of score
     urgent_transcript = any(
@@ -306,6 +320,43 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
     except Exception as e:
         errors.append(f"linear_project_health: {e}")
 
+    # ── 3. Sprint signals (team-wide — cadence differs from weekly steering) ─
+    print("  🏃 Fetching sprint signals...", file=sys.stderr)
+    sprint_signals = SprintSignals()
+    try:
+        sh = sprint_health()
+        vel = sprint_velocity(cycles=5)
+
+        cycle = sh.get("cycle", {})
+        metrics = sh.get("metrics", {})
+        prediction = sh.get("prediction", {})
+
+        # Days remaining in the active sprint
+        days_remaining: int | None = None
+        sprint_ends_at = cycle.get("ends_at") or cycle.get("endsAt")
+        if sprint_ends_at:
+            try:
+                ends = datetime.fromisoformat(sprint_ends_at.replace("Z", "+00:00"))
+                days_remaining = max(0, (ends.replace(tzinfo=None) - datetime.now()).days)
+            except (ValueError, TypeError):
+                pass
+
+        sprint_signals = SprintSignals(
+            sprint_name=cycle.get("name"),
+            sprint_ends_at=sprint_ends_at,
+            days_remaining_in_sprint=days_remaining,
+            sprint_completion_rate=round(metrics.get("completion_rate", 0.0), 1),
+            sprint_time_progress=round(prediction.get("time_progress", 0.0), 1),
+            sprint_status=prediction.get("status", "unknown"),
+            velocity_trend=vel.get("trend", "stable"),
+            velocity_avg=round(vel.get("average_velocity", 0.0), 2),
+            velocity_current=round(metrics.get("velocity", 0.0), 2),
+            cycles_analyzed=vel.get("cycles_analyzed", 0),
+        )
+        sources.append("sprint")
+    except Exception as e:
+        errors.append(f"sprint_signals: {e}")
+
     # Build index by name for fast lookup
     linear_by_name = {p["name"]: p for p in linear_projects}
 
@@ -385,14 +436,38 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
         )
         project_cards.append(card)
 
-    # ── 4. GitHub Issues enrichment ─────────────────────────────────────────
+    # ── 4. Attach velocity context to project cards ─────────────────────────
+    # sprint_velocity is team-wide — labelled clearly so CEO doesn't read it
+    # as project-specific. A declining trend compounds any per-project risk.
+    if sprint_signals.velocity_trend == "declining":
+        for card in project_cards:
+            if not card.week_delta:
+                card.week_delta = (
+                    f"Team velocity declining "
+                    f"(avg {sprint_signals.velocity_avg:.1f} pts/day, "
+                    f"last {sprint_signals.cycles_analyzed} sprints)"
+                )
+            card.evidence.append(Evidence(
+                source="sprint",
+                text=f"Team velocity trend: declining (avg {sprint_signals.velocity_avg:.1f} pts/day)",
+                severity="warning",
+            ))
+    elif sprint_signals.velocity_trend == "improving":
+        for card in project_cards:
+            card.evidence.append(Evidence(
+                source="sprint",
+                text=f"Team velocity trend: improving (avg {sprint_signals.velocity_avg:.1f} pts/day)",
+                severity="info",
+            ))
+
+    # ── 6. GitHub Issues enrichment ─────────────────────────────────────────
     try:
         project_cards = enrich_with_issue_signals(project_cards, week_start.isoformat())
         sources.append("github_issues")
     except Exception as e:
         errors.append(f"github_issues: {e}")
 
-    # ── 5. Granola transcript enrichment ────────────────────────────────────
+    # ── 7. Granola transcript enrichment ────────────────────────────────────
     cross_project_signals: list[dict] = []
     try:
         project_cards, cross_project_signals = enrich_with_granola(
@@ -402,7 +477,7 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
     except Exception as e:
         errors.append(f"granola: {e}")
 
-    # ── 6. Re-score with all signals now populated ───────────────────────────
+    # ── 8. Re-score with all signals now populated ───────────────────────────
     print("  🧮 Scoring projects...", file=sys.stderr)
     for card in project_cards:
         health_score, confidence, status, forecast = _score_project(
@@ -411,6 +486,7 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
             card.time_progress_pct,
             card.work_progress_pct,
             card.transcript_signals,
+            velocity_trend=sprint_signals.velocity_trend,
         )
         card.health_score = health_score
         card.confidence = confidence
@@ -423,11 +499,11 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
     _order = {"off_track": 0, "at_risk": 1, "on_track": 2}
     project_cards.sort(key=lambda c: (_order[c.status], c.health_score))
 
-    # ── 7. Capacity ─────────────────────────────────────────────────────────
+    # ── 9. Capacity ─────────────────────────────────────────────────────────
     print("  🏖  Checking capacity...", file=sys.stderr)
     capacity = _collect_capacity()
 
-    # ── 8. Decisions ────────────────────────────────────────────────────────
+    # ── 10. Decisions ────────────────────────────────────────────────────────
     decisions: list[dict] = []
     for card in project_cards:
         card.decision_needed = _detect_decision(card)
@@ -440,7 +516,7 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
                 "eta_risk": card.eta_risk,
             })
 
-    # ── 9. Cross-project risks ──────────────────────────────────────────────
+    # ── 11. Cross-project risks ──────────────────────────────────────────────
     cross_project_risks: list[str] = []
     for sig in cross_project_signals:
         for blocker in sig.get("blockers", []):
@@ -448,7 +524,7 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
         for risk in sig.get("risks", []):
             cross_project_risks.append(f"[{sig['title']}] {risk}")
 
-    # ── 10. Portfolio summary ────────────────────────────────────────────────
+    # ── 12. Portfolio summary ────────────────────────────────────────────────
     summary = PortfolioSummary(
         total_projects=len(project_cards),
         on_track=sum(1 for c in project_cards if c.status == "on_track"),
@@ -468,11 +544,12 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
         decisions_needed=decisions,
         cross_project_risks=cross_project_risks,
         capacity_signals=capacity,
+        sprint_signals=sprint_signals,
         sources=sources,
         errors=errors,
     )
 
-    # ── 11. Render ──────────────────────────────────────────────────────────
+    # ── 13. Render ──────────────────────────────────────────────────────────
     print("  🖨  Rendering report...", file=sys.stderr)
     try:
         report.rendered_markdown = render_markdown(report)

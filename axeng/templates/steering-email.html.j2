@@ -159,6 +159,89 @@
         </tr>
 
 {# ════════════════════════════════════════════════════════════════════════════
+   SPRINT PULSE  — team velocity + current sprint position
+   Note: sprint cadence (2 weeks) differs from this report (weekly).
+   Velocity trend is team-wide, not per-project.
+   ════════════════════════════════════════════════════════════════════════════ #}
+{% set sp = report.sprint_signals %}
+{% if sp and sp.sprint_name %}
+        <tr>
+          <td style="padding:0 0 20px;">
+            <table width="100%" cellpadding="12" cellspacing="0" border="0"
+                   style="border:1px solid {{ BORDER_COLOR }};border-radius:6px;
+                          background:{{ CARD_BG }};font-family:Arial,Helvetica,sans-serif;
+                          font-size:12px;">
+              <tr>
+                <td style="border-bottom:1px solid {{ BORDER_COLOR }};padding:10px 14px;">
+                  <span style="font-size:11px;font-weight:700;color:{{ MUTED_COLOR }};
+                                text-transform:uppercase;letter-spacing:0.07em;">
+                    Sprint Pulse
+                  </span>
+                  <span style="color:{{ MUTED_COLOR }};margin-left:8px;">
+                    {{ sp.sprint_name }}
+                    {%- if sp.days_remaining_in_sprint is not none %}
+                    &nbsp;·&nbsp;
+                    <strong style="color:{{ DANGER_COLOR if sp.days_remaining_in_sprint <= 2 else TEXT_COLOR }};">
+                      {{ sp.days_remaining_in_sprint }}d left
+                    </strong>
+                    {%- endif %}
+                  </span>
+                </td>
+              </tr>
+              <tr>
+                <td style="padding:10px 14px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      {# Sprint completion vs time elapsed #}
+                      <td style="width:50%;vertical-align:top;">
+                        <p style="margin:0 0 3px;color:{{ MUTED_COLOR }};font-size:11px;
+                                   text-transform:uppercase;letter-spacing:0.06em;">
+                          Sprint Progress
+                        </p>
+                        <p style="margin:0;color:{{ TEXT_COLOR }};font-size:13px;">
+                          <strong>{{ sp.sprint_completion_rate | int }}%</strong> done
+                          &nbsp;/&nbsp;{{ sp.sprint_time_progress | int }}% elapsed
+                          &nbsp;
+                          {%- if sp.sprint_status == "on_track" %}
+                            <span style="color:{{ SUCCESS_COLOR }};">● On track</span>
+                          {%- elif sp.sprint_status == "at_risk" %}
+                            <span style="color:{{ WARNING_COLOR }};">● At risk</span>
+                          {%- elif sp.sprint_status == "off_track" %}
+                            <span style="color:{{ DANGER_COLOR }};">● Off track</span>
+                          {%- endif %}
+                        </p>
+                      </td>
+                      {# Velocity trend — clearly labelled as team-wide #}
+                      <td style="width:50%;vertical-align:top;padding-left:16px;
+                                  border-left:1px solid {{ BORDER_COLOR }};">
+                        <p style="margin:0 0 3px;color:{{ MUTED_COLOR }};font-size:11px;
+                                   text-transform:uppercase;letter-spacing:0.06em;">
+                          Team Velocity (last {{ sp.cycles_analyzed }} sprints)
+                        </p>
+                        <p style="margin:0;color:{{ TEXT_COLOR }};font-size:13px;">
+                          <strong>{{ sp.velocity_avg }}</strong> pts/day avg
+                          &nbsp;
+                          {%- if sp.velocity_trend == "declining" %}
+                            <span style="color:{{ DANGER_COLOR }};font-weight:600;">↓ Declining</span>
+                          {%- elif sp.velocity_trend == "improving" %}
+                            <span style="color:{{ SUCCESS_COLOR }};font-weight:600;">↑ Improving</span>
+                          {%- elif sp.velocity_trend == "stable" %}
+                            <span style="color:{{ MUTED_COLOR }};">→ Stable</span>
+                          {%- else %}
+                            <span style="color:{{ MUTED_COLOR }};">— Insufficient data</span>
+                          {%- endif %}
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+{% endif %}
+
+{# ════════════════════════════════════════════════════════════════════════════
    DECISIONS NEEDED  — only rendered when decisions exist
    ════════════════════════════════════════════════════════════════════════════ #}
 {% if report.decisions %}
@@ -383,6 +466,13 @@
                         {{ p.time_progress_pct | int }}% of calendar elapsed
                         &nbsp;&middot;&nbsp;
                         ETA risk: {{ eta_badge(p.eta_risk) }}
+                        {%- if report.sprint_signals and report.sprint_signals.velocity_trend == "declining" %}
+                        &nbsp;&middot;&nbsp;
+                        <span style="color:{{ DANGER_COLOR }};">↓ team velocity</span>
+                        {%- elif report.sprint_signals and report.sprint_signals.velocity_trend == "improving" %}
+                        &nbsp;&middot;&nbsp;
+                        <span style="color:{{ SUCCESS_COLOR }};">↑ team velocity</span>
+                        {%- endif %}
                       </td>
                       <td align="right" style="color:{{ MUTED_COLOR }};">
                         {% if p.target_date %}

@@ -314,10 +314,16 @@ def logs(
 ):
     return {"logs": get_logs(limit, log_type), "total": len(get_logs(500))}
 
+def _steering_output_dir() -> Path:
+    """Return the steering report directory from config, matching the generator."""
+    raw = get("steering.output_dir", "~/.axeng/reports/steering")
+    return Path(raw).expanduser()
+
+
 @app.get("/api/reports/steering")
 def steering_reports_list():
     """List all generated CEO steering reports (newest first)."""
-    output_dir = Path.home() / ".axeng" / "reports" / "steering"
+    output_dir = _steering_output_dir()
     index_path = output_dir / "index.json"
     if not index_path.exists():
         return {"reports": [], "count": 0}
@@ -331,19 +337,16 @@ def steering_reports_list():
 @app.get("/api/reports/steering/latest")
 def steering_report_latest():
     """Return the most recently generated CEO steering report."""
-    import re
-    output_dir = Path.home() / ".axeng" / "reports" / "steering"
+    from fastapi import HTTPException
+    output_dir = _steering_output_dir()
     index_path = output_dir / "index.json"
     if not index_path.exists():
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="No steering reports found")
     index = json.loads(index_path.read_text())
     if not index:
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail="No steering reports found")
     report_path = output_dir / f"{index[0]['id']}.json"
     if not report_path.exists():
-        from fastapi import HTTPException
         raise HTTPException(status_code=404, detail=f"Report file missing: {index[0]['id']}.json")
     return json.loads(report_path.read_text())
 
@@ -355,7 +358,7 @@ def steering_report_by_id(report_id: str):
     from fastapi import HTTPException
     if not re.fullmatch(r"steering-\d{4}-\d{2}-\d{2}", report_id):
         raise HTTPException(status_code=400, detail="Invalid report ID format")
-    output_dir = Path.home() / ".axeng" / "reports" / "steering"
+    output_dir = _steering_output_dir()
     report_path = output_dir / f"{report_id}.json"
     if not report_path.exists():
         raise HTTPException(status_code=404, detail=f"Report not found: {report_id}")

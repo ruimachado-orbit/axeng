@@ -1,10 +1,13 @@
+'use client'
+
 // CEO Steering — report detail page.
 // Renders the stored HTML directly (iframe-isolated) or falls back to
 // structured rendering from JSON if HTML is not available.
+import { useEffect, useState } from 'react'
+import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { notFound } from 'next/navigation'
 
-const API_BASE = process.env.AXENG_API_BASE || 'http://localhost:3457'
+const API_BASE = process.env.NEXT_PUBLIC_AXENG_API_BASE || 'http://localhost:3457'
 
 interface ProjectCard {
   name: string
@@ -44,21 +47,6 @@ interface SteeringReport {
   rendered_html: string | null
 }
 
-async function fetchReport(date: string): Promise<SteeringReport | null> {
-  // Validate date format before hitting the API
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return null
-  try {
-    const res = await fetch(`${API_BASE}/api/reports/steering/steering-${date}`, {
-      cache: 'no-store',
-    })
-    if (res.status === 404) return null
-    if (!res.ok) return null
-    return await res.json()
-  } catch {
-    return null
-  }
-}
-
 const STATUS_COLOR: Record<string, string> = {
   on_track: '#16a34a',
   at_risk: '#d97706',
@@ -70,14 +58,39 @@ const STATUS_LABEL: Record<string, string> = {
   off_track: 'Off Track',
 }
 
-export default async function SteeringReportPage({
-  params,
-}: {
-  params: Promise<{ date: string }>
-}) {
-  const { date } = await params
-  const report = await fetchReport(date)
-  if (!report) notFound()
+export default function SteeringReportPage() {
+  const params = useParams()
+  const date = typeof params.date === 'string' ? params.date : ''
+  const [report, setReport] = useState<SteeringReport | null | 'not_found' | 'loading'>('loading')
+
+  useEffect(() => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { setReport('not_found'); return }
+    fetch(`${API_BASE}/api/reports/steering/steering-${date}`)
+      .then(r => r.status === 404 ? null : r.ok ? r.json() : null)
+      .then(data => setReport(data ?? 'not_found'))
+      .catch(() => setReport('not_found'))
+  }, [date])
+
+  if (report === 'loading') {
+    return (
+      <div style={{ maxWidth: 660, margin: '48px auto', padding: '0 24px',
+                    fontFamily: 'Arial, sans-serif', fontSize: 13, color: '#9ca3af' }}>
+        Loading…
+      </div>
+    )
+  }
+
+  if (report === 'not_found') {
+    return (
+      <div style={{ maxWidth: 660, margin: '48px auto', padding: '0 24px' }}>
+        <Link href="/steering" style={{ fontSize: 12, color: '#6b7280', textDecoration: 'none',
+                                         fontFamily: 'Arial, sans-serif' }}>← All reports</Link>
+        <p style={{ marginTop: 24, fontSize: 14, color: '#374151', fontFamily: 'Arial, sans-serif' }}>
+          Report not found for <strong>{date}</strong>.
+        </p>
+      </div>
+    )
+  }
 
   // If rendered HTML is available, serve it in a full-page iframe for exact email fidelity
   if (report.rendered_html) {

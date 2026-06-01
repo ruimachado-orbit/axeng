@@ -179,6 +179,9 @@ class SteeringReport:
 
     sprint_signals: SprintSignals = field(default_factory=SprintSignals)
 
+    this_week_summary: list[str] = field(default_factory=list)   # portfolio-level what happened
+    next_week_summary: list[str] = field(default_factory=list)   # portfolio-level what's coming
+
     sources: list[str] = field(default_factory=list)  # which signals were available
     errors: list[str] = field(default_factory=list)   # non-fatal collection failures
 

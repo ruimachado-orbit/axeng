@@ -425,6 +425,102 @@ def _build_bottom_line(projects: list[ProjectCard], decisions: list[dict]) -> st
     return " ".join(parts)
 
 
+# ── Portfolio-level weekly summaries ────────────────────────────────────────
+
+def _build_this_week_summary(cards: list[ProjectCard]) -> list[str]:
+    """
+    3-5 bullet points of what happened across all projects this week.
+    Aggregates: commits, issues closed, milestones hit, blockers surfaced.
+    """
+    bullets: list[str] = []
+
+    # Total commits across all projects
+    total_commits = sum(c.commit_signals.commits_this_week for c in cards)
+    active_projects = [c for c in cards if c.commit_signals.commits_this_week > 0]
+    if total_commits > 0:
+        proj_str = ", ".join(p.name for p in active_projects[:3])
+        bullets.append(f"{total_commits} commits across {len(active_projects)} project{'s' if len(active_projects) > 1 else ''} ({proj_str})")
+
+    # Issues closed (estimated from velocity × 7 days)
+    total_closed = sum(
+        max(1, round(c.linear_signals.velocity * 7))
+        for c in cards if c.linear_signals.velocity > 0
+    )
+    if total_closed > 0:
+        bullets.append(f"~{total_closed} issues completed across the portfolio")
+
+    # Milestones passed this week
+    from datetime import date as _d, timedelta
+    week_ago = (_d.today() - timedelta(days=7)).isoformat()
+    today = _d.today().isoformat()
+    ms_passed = []
+    for c in cards:
+        for m in c.milestones:
+            if week_ago <= m.get("target_date", "") <= today:
+                ms_passed.append(f"{c.name}: {m['name']}")
+    if ms_passed:
+        bullets.append(f"Milestones reached: {', '.join(ms_passed[:3])}")
+
+    # Projects with growing backlog
+    growing = [c for c in cards if c.issue_signals.backlog_growth > 2]
+    if growing:
+        names = ", ".join(c.name for c in growing[:3])
+        bullets.append(f"Backlog growing in: {names}")
+
+    # Overdue projects
+    overdue = [c for c in cards if c.days_left is not None and c.days_left < 0]
+    if overdue:
+        bullets.append(f"Past deadline: {', '.join(c.name for c in overdue)}")
+
+    return bullets[:5]
+
+
+def _build_next_week_summary(cards: list[ProjectCard]) -> list[str]:
+    """
+    3-5 bullet points of what's planned / committed for next week.
+    Aggregates: meeting commitments, upcoming milestones, in-progress work.
+    """
+    bullets: list[str] = []
+    from datetime import date as _d, timedelta
+    today = _d.today().isoformat()
+    next_2w = (_d.today() + timedelta(days=14)).isoformat()
+
+    # Meeting commitments across projects
+    commitments = []
+    for c in cards:
+        for ts in c.transcript_signals:
+            for commitment in ts.commitments[:1]:
+                if commitment:
+                    commitments.append(f"{c.name}: {commitment}")
+    if commitments:
+        bullets.append(f"Committed in calls: {'; '.join(commitments[:3])}")
+
+    # Milestones due in next 2 weeks
+    upcoming_ms = []
+    for c in cards:
+        for m in sorted(c.milestones, key=lambda m: m.get("target_date", "")):
+            if today <= m.get("target_date", "") <= next_2w:
+                upcoming_ms.append(f"{c.name}: {m['name']} ({m['target_date']})")
+                break
+    if upcoming_ms:
+        bullets.append(f"Milestones due next 2 weeks: {', '.join(upcoming_ms[:4])}")
+
+    # Projects with in-progress work
+    in_flight = [
+        f"{c.name} ({c.linear_signals.in_progress} in progress)"
+        for c in cards if c.linear_signals.in_progress > 0
+    ]
+    if in_flight:
+        bullets.append(f"Active work: {', '.join(in_flight[:4])}")
+
+    # Projects needing decisions before they can move
+    blocked = [c for c in cards if c.decision_needed]
+    if blocked:
+        bullets.append(f"Blocked on decision: {', '.join(c.name for c in blocked[:3])}")
+
+    return bullets[:5]
+
+
 # ── Capacity signals ─────────────────────────────────────────────────────────
 
 def _collect_capacity() -> CapacitySignals:
@@ -511,12 +607,10 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
     print("  🃏 Building project cards...", file=sys.stderr)
     project_cards: list[ProjectCard] = []
 
-    # Union of mapped projects + any Linear projects not yet in the map.
-    # Mapped projects come first (they have repo/owner metadata); unmapped are
-    # appended so they still appear in the report with a warning in evidence.
-    mapped_names = set(linear_github_map.keys())
-    unmapped_names = [p["name"] for p in linear_projects if p["name"] not in mapped_names]
-    configured_projects = list(linear_github_map.keys()) + unmapped_names
+    # Only include projects explicitly configured in project_ids.
+    # This keeps the steering report focused — no noise from test projects,
+    # onboarding, or internal tooling that isn't part of the portfolio.
+    configured_projects = list(linear_github_map.keys())
 
     for proj_name in configured_projects:
         map_entry = linear_github_map.get(proj_name, {})
@@ -737,6 +831,8 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
         cross_project_risks=cross_project_risks,
         capacity_signals=capacity,
         sprint_signals=sprint_signals,
+        this_week_summary=_build_this_week_summary(project_cards),
+        next_week_summary=_build_next_week_summary(project_cards),
         sources=sources,
         errors=errors,
     )

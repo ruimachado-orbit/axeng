@@ -433,6 +433,49 @@ def _html_capacity(ooo: list[str], t: dict) -> str:
     )
 
 
+def _html_week_summaries(this_week: list[str], next_week: list[str], t: dict) -> str:
+    if not this_week and not next_week:
+        return ""
+
+    def _bullet_list(items: list[str]) -> str:
+        return "".join(
+            f'<p style="margin:0 0 5px;font-family:{t["FONT"]};font-size:13px;'
+            f'color:{t["TEXT"]};line-height:1.5;">'
+            f'<span style="color:{t["ACCENT"]};margin-right:6px;">›</span>{item}</p>'
+            for item in items
+        )
+
+    cols = ""
+    if this_week:
+        cols += (
+            f'<td style="width:50%;vertical-align:top;padding-right:16px;">'
+            f'<p style="margin:0 0 8px;font-family:{t["FONT_UI"]};font-size:10px;font-weight:600;'
+            f'color:{t["NAVY"]};text-transform:uppercase;letter-spacing:0.1em;">This Week</p>'
+            f'{_bullet_list(this_week)}'
+            f'</td>'
+        )
+    if next_week:
+        border = f'border-left:1px solid {t["BORDER"]};padding-left:16px;' if this_week else ""
+        cols += (
+            f'<td style="width:50%;vertical-align:top;{border}">'
+            f'<p style="margin:0 0 8px;font-family:{t["FONT_UI"]};font-size:10px;font-weight:600;'
+            f'color:{t["NAVY"]};text-transform:uppercase;letter-spacing:0.1em;">Next Week</p>'
+            f'{_bullet_list(next_week)}'
+            f'</td>'
+        )
+
+    return (
+        f'<tr><td style="padding:20px 0 0;">'
+        f'<table width="100%" cellpadding="14" cellspacing="0" border="0" '
+        f'style="border:1px solid {t["BORDER_DARK"]};border-radius:6px;background:{t["WHITE"]};">'
+        f'<tr><td>'
+        f'<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
+        f'{cols}'
+        f'</tr></table>'
+        f'</td></tr></table></td></tr>\n'
+    )
+
+
 def _html_footer(sources: list[str], errors: list[str], t: dict) -> str:
     errors_html = ""
     if errors:
@@ -487,6 +530,7 @@ def render_html(report: SteeringReport) -> str:
     rows = ""
     rows += _html_header(report, recipient, week_label, t)
     rows += _html_bottom_line(report.portfolio_summary.top_risk or "No summary.", t)
+    rows += _html_week_summaries(d.get("this_week_summary", []), d.get("next_week_summary", []), t)
     rows += _html_sprint_pulse(sp, t)
     rows += _html_decisions(d.get("decisions_needed", []), t)
     rows += _html_portfolio_table(projects, t)
@@ -550,6 +594,20 @@ def render_markdown(report: SteeringReport) -> str:
     lines.append("")
     lines.append(f"> **{s.top_risk}**")
     lines.append("")
+
+    if report.this_week_summary:
+        lines.append("## This Week")
+        lines.append("")
+        for b in report.this_week_summary:
+            lines.append(f"- {b}")
+        lines.append("")
+
+    if report.next_week_summary:
+        lines.append("## Next Week")
+        lines.append("")
+        for b in report.next_week_summary:
+            lines.append(f"- {b}")
+        lines.append("")
 
     sp = report.sprint_signals
     if sp and sp.sprint_name:

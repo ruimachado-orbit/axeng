@@ -93,7 +93,7 @@ def _html_header(report: SteeringReport, recipient: str, week_label: str, t: dic
         f'letter-spacing:6px;text-transform:uppercase;color:rgba(255,255,255,0.5);">'
         f'{t["COMPANY"]}</p>'
         f'<h1 style="margin:0 0 6px;font-family:{t["FONT"]};font-size:26px;font-weight:400;'
-        f'color:{t["WHITE"]};letter-spacing:-0.02em;line-height:1.2;">Engineering Update</h1>'
+        f'color:{t["WHITE"]};letter-spacing:-0.02em;line-height:1.2;">Steering Report</h1>'
         f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:12px;color:rgba(255,255,255,0.5);">'
         f'{week_label} &nbsp;·&nbsp; For {recipient} &nbsp;·&nbsp; {report.generated_at[:10]}'
         f'</p></td></tr>\n'
@@ -492,7 +492,7 @@ def render_html(report: SteeringReport) -> str:
         f'<!DOCTYPE html><html lang="en"><head>'
         f'<meta charset="utf-8">'
         f'<meta name="viewport" content="width=device-width, initial-scale=1.0">'
-        f'<title>Engineering Update — {week_label}</title>'
+        f'<title>Steering Report — {week_label}</title>'
         f'</head>'
         f'<body style="margin:0;padding:0;background:{t["BG"]};'
         f'font-family:{t["FONT"]};color:{t["TEXT"]};">'
@@ -514,7 +514,7 @@ def render_markdown(report: SteeringReport) -> str:
     lines: list[str] = []
     s = report.portfolio_summary
 
-    lines.append(f"# Engineering Update — {report.week_end}")
+    lines.append(f"# Steering Report — {report.week_end}")
     lines.append(f"*{report.week_start} → {report.week_end} · generated {report.generated_at[:16].replace('T', ' ')}*")
     lines.append("")
     lines.append(f"> **{s.top_risk}**")

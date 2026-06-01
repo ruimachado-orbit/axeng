@@ -359,18 +359,32 @@ def linear_project_health(days: int = 30) -> dict:
     - Project health metrics (velocity, staleness, completion rate)
     - Risk indicators
     """
-    # Fetch all projects
-    projects_query = """
+    # Query 1: project metadata (light — no issues, stays well under complexity limit)
+    meta_query = """
     {
       projects(first: 50) {
         nodes {
           id name state
           lead { name email }
           targetDate startDate
-          milestones {
-            nodes { name targetDate description }
+          projectMilestones {
+            nodes { name targetDate }
           }
-          issues {
+        }
+      }
+    }
+    """
+    meta_result = linear_query(meta_query)
+    meta_nodes = meta_result.get("data", {}).get("projects", {}).get("nodes", [])
+    meta_by_id = {p["id"]: p for p in meta_nodes}
+
+    # Query 2: issues per project (capped at 30 per project to stay under complexity)
+    issues_query = """
+    {
+      projects(first: 50) {
+        nodes {
+          id
+          issues(first: 30) {
             nodes {
               identifier title state { name type }
               createdAt updatedAt completedAt
@@ -381,9 +395,15 @@ def linear_project_health(days: int = 30) -> dict:
       }
     }
     """
+    issues_result = linear_query(issues_query)
+    issues_nodes = issues_result.get("data", {}).get("projects", {}).get("nodes", [])
 
-    result = linear_query(projects_query)
-    projects = result.get("data", {}).get("projects", {}).get("nodes", [])
+    # Merge: attach issues to metadata
+    issues_by_id = {p["id"]: p.get("issues", {}).get("nodes", []) for p in issues_nodes}
+    projects = []
+    for p in meta_nodes:
+        p["issues"] = {"nodes": issues_by_id.get(p["id"], [])}
+        projects.append(p)
 
     if not projects:
         # Fallback: group by team if no projects
@@ -463,7 +483,7 @@ def linear_project_health(days: int = 30) -> dict:
         if velocity < 0.5:
             risks.append("Low velocity - less than 0.5 issues/day")
 
-        raw_milestones = (project.get("milestones") or {}).get("nodes", [])
+        raw_milestones = (project.get("projectMilestones") or {}).get("nodes", [])
         milestones = [
             {"name": m.get("name"), "target_date": m.get("targetDate")}
             for m in raw_milestones if m.get("targetDate")

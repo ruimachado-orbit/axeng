@@ -466,6 +466,7 @@ def linear_project_health(days: int = 30) -> dict:
             "state": project.get("state"),
             "lead": project.get("lead", {}).get("name", "Unassigned"),
             "target_date": project.get("targetDate"),
+            "start_date": project.get("startDate"),
             "metrics": {
                 "total_issues": total_issues,
                 "completed": len(completed),

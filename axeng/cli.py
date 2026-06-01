@@ -1269,6 +1269,88 @@ def _run_weekly_report(send: bool = False) -> None:
         console.print(f"[red]Error:[/red] {e}")
 
 
+@app.command()
+def schedule(
+    install: bool = typer.Option(False, "--install", help="Install weekly cron job for steering report"),
+    uninstall: bool = typer.Option(False, "--uninstall", help="Remove steering report cron job"),
+    status: bool = typer.Option(False, "--status", help="Show current schedule"),
+):
+    """Manage weekly automation — install/remove the Friday CEO steering report cron job."""
+    if not any([install, uninstall, status]):
+        console.print("[yellow]Usage:[/yellow]")
+        console.print("  axeng schedule --install    Install Friday 7am cron job")
+        console.print("  axeng schedule --uninstall  Remove the cron job")
+        console.print("  axeng schedule --status     Show current schedule")
+        return
+
+    _CRON_TAG = "# axeng-steering-report"
+    axeng_bin = subprocess.run(["which", "axeng"], capture_output=True, text=True).stdout.strip()
+    if not axeng_bin:
+        axeng_bin = sys.executable.replace("python3", "axeng").replace("python", "axeng")
+
+    try:
+        # Read current crontab (empty string if none)
+        current = subprocess.run(
+            ["crontab", "-l"], capture_output=True, text=True
+        )
+        crontab_lines = current.stdout.splitlines() if current.returncode == 0 else []
+
+        if status:
+            existing = [l for l in crontab_lines if _CRON_TAG in l]
+            if existing:
+                console.print(f"[green]✓[/green] Steering report scheduled:")
+                for line in existing:
+                    console.print(f"  [dim]{line}[/dim]")
+            else:
+                console.print("[yellow]No steering report schedule found.[/yellow]")
+                console.print("Run  axeng schedule --install  to set one up.")
+            return
+
+        if uninstall:
+            new_lines = [l for l in crontab_lines if _CRON_TAG not in l]
+            if len(new_lines) == len(crontab_lines):
+                console.print("[yellow]No steering report cron job found — nothing to remove.[/yellow]")
+                return
+            _write_crontab(new_lines)
+            console.print("[green]✓[/green] Steering report cron job removed.")
+            return
+
+        if install:
+            # Read schedule from config (weekday 0=Mon…4=Fri, default Friday=4)
+            sys.path.insert(0, str(Path(__file__).parent))
+            from config import get as cfg_get
+            weekday = cfg_get("steering.weekday", 4)   # 0=Mon, 4=Fri
+            timezone = cfg_get("steering.timezone", "")
+            # Map weekday int to cron day-of-week (1=Mon…5=Fri in cron)
+            cron_dow = weekday + 1  # Linear 0-indexed Monday → cron 1-indexed Monday
+            cron_line = (
+                f"0 7 * * {cron_dow} {axeng_bin} report --steering --send"
+                f"  {_CRON_TAG}"
+            )
+            # Remove any existing steering line, then append new one
+            new_lines = [l for l in crontab_lines if _CRON_TAG not in l]
+            new_lines.append(cron_line)
+            _write_crontab(new_lines)
+
+            day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+            day_name = day_names[weekday] if weekday < len(day_names) else f"day {weekday}"
+            console.print(f"[green]✓[/green] Steering report scheduled every {day_name} at 07:00.")
+            console.print(f"[dim]{cron_line}[/dim]")
+            if timezone:
+                console.print(f"[dim]Note: cron runs in system timezone, not {timezone}. Adjust the hour if needed.[/dim]")
+
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+
+
+def _write_crontab(lines: list[str]) -> None:
+    """Write lines to crontab, stripping trailing blank lines."""
+    content = "\n".join(l for l in lines if l.strip()) + "\n"
+    proc = subprocess.run(["crontab", "-"], input=content, text=True, capture_output=True)
+    if proc.returncode != 0:
+        raise RuntimeError(proc.stderr.strip() or "crontab write failed")
+
+
 def main():
     """Main CLI entry point"""
     app()

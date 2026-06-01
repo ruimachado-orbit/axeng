@@ -138,6 +138,7 @@ class ProjectCard:
     week_delta: str | None = None         # "2 issues closed, 5 opened — backlog growing"
     decision_needed: str | None = None    # null = no action needed
     meeting_signal: str | None = None     # one-liner from latest relevant Granola note
+    next_week: str | None = None          # what's committed/planned for next week
 
     # Traceability
     evidence: list[Evidence] = field(default_factory=list)

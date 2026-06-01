@@ -274,6 +274,48 @@ def _build_week_delta(card: ProjectCard) -> str | None:
     return " · ".join(parts) if parts else None
 
 
+def _build_next_week(card: ProjectCard) -> str | None:
+    """
+    Synthesise what's planned/committed for next week from:
+    - Commitments extracted from Granola meeting notes
+    - Linear in-progress + high-priority todo issues
+    - Upcoming milestones
+    """
+    parts: list[str] = []
+
+    # 1. Meeting commitments (highest signal — explicitly said on a call)
+    for ts in card.transcript_signals:
+        for commitment in ts.commitments[:2]:
+            if commitment:
+                parts.append(f'"{commitment}" (committed in {ts.title})')
+        if len(parts) >= 2:
+            break
+
+    # 2. Upcoming milestone
+    if card.milestones and not parts:
+        from datetime import date as _d, timedelta
+        today = _d.today()
+        next_2w = today + timedelta(days=14)
+        soon = [
+            m for m in card.milestones
+            if m.get("target_date") and today.isoformat() <= m["target_date"] <= next_2w.isoformat()
+        ]
+        soon.sort(key=lambda m: m["target_date"])
+        if soon:
+            m = soon[0]
+            parts.append(f"Milestone due: {m['name']} ({m['target_date']})")
+
+    # 3. Linear in-progress work as a signal of what's being pushed
+    lin = card.linear_signals
+    if not parts and lin.in_progress > 0:
+        parts.append(
+            f"{lin.in_progress} issue{'s' if lin.in_progress > 1 else ''} in progress"
+            + (f", {lin.todo} queued" if lin.todo > 0 else "")
+        )
+
+    return " · ".join(parts) if parts else None
+
+
 def _detect_decision(card: ProjectCard) -> str | None:
     """Return a one-line decision prompt if the project needs one, else None."""
     if card.forecast == "blocked_needs_escalation":
@@ -563,9 +605,10 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
         # Re-derive eta_risk now that issue signals are included
         card.eta_risk = _compute_eta_risk(card.days_left, card.timeline_position)
 
-    # Build synthesised week summary per project
+    # Build synthesised week summary + next week forecast per project
     for card in project_cards:
         card.week_delta = _build_week_delta(card)
+        card.next_week = _build_next_week(card)
 
     # Sort: off_track first, then at_risk, then on_track; within group by health asc
     _order = {"off_track": 0, "at_risk": 1, "on_track": 2}

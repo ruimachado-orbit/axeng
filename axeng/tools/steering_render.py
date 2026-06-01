@@ -371,6 +371,21 @@ def _html_project_card(p: dict, sp_trend: str, t: dict) -> str:
             f'</td></tr>'
         )
 
+    # Next week
+    next_week = p.get("next_week")
+    if next_week:
+        decision = p.get("decision_needed")
+        border = f'border-bottom:1px solid {t["BORDER"]};' if decision else ""
+        html += (
+            f'<tr><td width="4" style="background:{t["BORDER"]};"></td>'
+            f'<td style="padding:10px 16px;{border}">'
+            f'<p style="margin:0 0 4px;font-family:{t["FONT_UI"]};font-size:10px;font-weight:600;'
+            f'color:{t["MUTED"]};text-transform:uppercase;letter-spacing:0.08em;">Next Week</p>'
+            f'<p style="margin:0;font-family:{t["FONT"]};font-size:13px;'
+            f'color:{t["TEXT"]};line-height:1.6;">{next_week}</p>'
+            f'</td></tr>'
+        )
+
     # Decision
     decision = p.get("decision_needed")
     if decision:
@@ -607,6 +622,9 @@ def render_markdown(report: SteeringReport) -> str:
             lines.append("")
         if p.week_delta:
             lines.append(f"**This week:** {p.week_delta}")
+            lines.append("")
+        if p.next_week:
+            lines.append(f"**Next week:** {p.next_week}")
             lines.append("")
         if p.decision_needed:
             lines.append(f"**⚡ Action needed:** {p.decision_needed}")

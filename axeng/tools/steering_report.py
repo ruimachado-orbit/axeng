@@ -238,6 +238,42 @@ def _score_project(
 
 # ── Decision detection ───────────────────────────────────────────────────────
 
+def _build_week_delta(card: ProjectCard) -> str | None:
+    """
+    Synthesise a one-sentence week summary from Linear issues closed,
+    GitHub Issues backlog movement, and commits. Replaces raw signal lists.
+    """
+    parts = []
+
+    # Issues closed vs opened (Linear completion rate is cumulative so use
+    # GitHub Issues backlog_growth as the week-scoped signal)
+    lin = card.linear_signals
+    iss = card.issue_signals
+    cs = card.commit_signals
+
+    # Completed issues this period from Linear velocity
+    if lin.completed > 0 and lin.velocity > 0:
+        closed_est = max(1, round(lin.velocity * 7))  # estimated from velocity
+        parts.append(f"{closed_est} issue{'s' if closed_est > 1 else ''} completed")
+
+    # Backlog movement
+    bg = iss.backlog_growth
+    if bg > 2:
+        parts.append(f"+{bg} net new issues (backlog growing)")
+    elif bg < -1:
+        parts.append(f"{abs(bg)} more closed than opened")
+
+    # Commits
+    if cs.commits_this_week > 0:
+        parts.append(f"{cs.commits_this_week} commit{'s' if cs.commits_this_week > 1 else ''}")
+
+    # Silent repo warning
+    if cs.quiet_repos and card.repos:
+        parts.append(f"{len(cs.quiet_repos)} repo silent")
+
+    return " · ".join(parts) if parts else None
+
+
 def _detect_decision(card: ProjectCard) -> str | None:
     """Return a one-line decision prompt if the project needs one, else None."""
     if card.forecast == "blocked_needs_escalation":
@@ -481,16 +517,12 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
                 active_repos=active,
                 quiet_repos=quiet,
             )
-            if total > 0:
-                card.wins.append(f"{total} commit{'s' if total > 1 else ''} this week")
-            elif card.repos:
+            if not total and card.repos:
                 card.evidence.append(Evidence(
                     source="github_issues",
                     text=f"No commits in {len(card.repos)} repo(s) this week",
                     severity="warning",
                 ))
-                if not card.week_delta:
-                    card.week_delta = "No commits this week — code activity silent"
         sources.append("github_commits")
     except Exception as e:
         errors.append(f"github_commits: {e}")
@@ -529,6 +561,10 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
         card.forecast = forecast
         # Re-derive eta_risk now that issue signals are included
         card.eta_risk = _compute_eta_risk(card.days_left, card.timeline_position)
+
+    # Build synthesised week summary per project
+    for card in project_cards:
+        card.week_delta = _build_week_delta(card)
 
     # Sort: off_track first, then at_risk, then on_track; within group by health asc
     _order = {"off_track": 0, "at_risk": 1, "on_track": 2}

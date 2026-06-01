@@ -343,39 +343,18 @@ def _html_project_card(p: dict, sp_trend: str, t: dict) -> str:
             f'</td></tr>'
         )
 
-    # This week — commits + week_delta
-    cs = p.get("commit_signals") or {}
-    commits = cs.get("commits_this_week", 0)
-    active_repos = cs.get("active_repos", [])
-    quiet_repos = cs.get("quiet_repos", [])
+    # This week — synthesised summary from week_delta
     delta = p.get("week_delta")
-
-    this_week_lines = []
-    if commits > 0:
-        repo_str = f" across {len(active_repos)} repo{'s' if len(active_repos) > 1 else ''}" if active_repos else ""
-        this_week_lines.append(
-            f'<span style="color:{t["SUCCESS"]};font-weight:600;">'
-            f'{commits} commit{"s" if commits > 1 else ""}</span>{repo_str} this week'
-        )
-    if quiet_repos and p.get("repos"):
-        this_week_lines.append(
-            f'<span style="color:{t["MUTED"]};">'
-            f'{len(quiet_repos)} repo{"s" if len(quiet_repos) > 1 else ""} silent this week</span>'
-        )
     if delta:
-        this_week_lines.append(delta)
-
-    if this_week_lines:
         decision = p.get("decision_needed")
         border = f'border-bottom:1px solid {t["BORDER"]};' if decision else ""
-        content = "<br>".join(this_week_lines)
         html += (
             f'<tr><td width="4" style="background:{t["BORDER"]};"></td>'
             f'<td style="padding:10px 16px;{border}">'
             f'<p style="margin:0 0 4px;font-family:{t["FONT_UI"]};font-size:10px;font-weight:600;'
             f'color:{t["MUTED"]};text-transform:uppercase;letter-spacing:0.08em;">This Week</p>'
             f'<p style="margin:0;font-family:{t["FONT"]};font-size:13px;'
-            f'color:{t["TEXT"]};line-height:1.6;">{content}</p>'
+            f'color:{t["TEXT"]};line-height:1.6;">{delta}</p>'
             f'</td></tr>'
         )
 
@@ -606,11 +585,6 @@ def render_markdown(report: SteeringReport) -> str:
             lines.append("")
         if p.meeting_signal:
             lines.append(f"**From meetings:** {p.meeting_signal}")
-            lines.append("")
-        cs = p.commit_signals
-        if cs.commits_this_week > 0:
-            repo_str = f" across {len(cs.active_repos)} repo{'s' if len(cs.active_repos) > 1 else ''}" if cs.active_repos else ""
-            lines.append(f"**Commits:** {cs.commits_this_week}{repo_str} this week")
             lines.append("")
         if p.week_delta:
             lines.append(f"**This week:** {p.week_delta}")

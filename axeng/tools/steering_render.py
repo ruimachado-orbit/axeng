@@ -280,13 +280,16 @@ def _html_project_card(p: dict, sp_trend: str, t: dict) -> str:
     if target and days_left is not None:
         target_str += f" ({days_left}d left)"
 
-    # Milestones — show next upcoming one
+    # Milestones — find current (next upcoming) and show position in sequence
     milestones = p.get("milestones") or []
-    from datetime import date as _date
+    from datetime import date as _date, timedelta as _td
     today_str = _date.today().isoformat()
-    upcoming = [m for m in milestones if m.get("target_date", "") >= today_str]
-    upcoming.sort(key=lambda m: m.get("target_date", ""))
-    next_milestone = upcoming[0] if upcoming else None
+    sorted_ms = sorted(milestones, key=lambda m: m.get("target_date", ""))
+    upcoming_ms = [m for m in sorted_ms if m.get("target_date", "") >= today_str]
+    past_ms = [m for m in sorted_ms if m.get("target_date", "") < today_str]
+    next_milestone = upcoming_ms[0] if upcoming_ms else None
+    # milestone position: "2 of 5 milestones passed"
+    ms_position = f"{len(past_ms)} of {len(sorted_ms)} milestones passed" if sorted_ms else None
 
     # Header
     html = (
@@ -318,11 +321,11 @@ def _html_project_card(p: dict, sp_trend: str, t: dict) -> str:
         f' &nbsp;/&nbsp; {time_pct}% elapsed'
         f' &nbsp;·&nbsp; ETA: <span style="color:{_eta_color(eta, t)};font-weight:600;">'
         f'{_eta_label(eta)}</span>{vel_html}</td>'
-        f'<td align="right">{target_str}'
-        + (
-            f'<br><span style="color:{t["ACCENT"]};font-size:10px;">▸ {next_milestone["name"]} · {next_milestone["target_date"]}</span>'
-            if next_milestone else ""
-        )
+        f'<td align="right" style="text-align:right;">'
+        f'<strong style="color:{t["NAVY"]};">{target_str.split("(")[0].strip()}</strong>'
+        + (f'<br><span style="color:{t["MUTED"]};font-size:10px;">{target_str.split("(")[1].rstrip(")") if "(" in target_str else ""}</span>' if "(" in target_str else "")
+        + (f'<br><span style="color:{t["ACCENT"]};font-size:10px;font-weight:600;">▸ {next_milestone["name"]}</span><br><span style="color:{t["MUTED"]};font-size:10px;">{next_milestone["target_date"]}</span>' if next_milestone else "")
+        + (f'<br><span style="color:{t["MUTED"]};font-size:10px;">{ms_position}</span>' if ms_position else "")
         + f'</td>'
         f'</tr></table></td></tr>'
     )
@@ -606,11 +609,15 @@ def render_markdown(report: SteeringReport) -> str:
         )
         lines.append(f"**ETA:** {p.eta_risk.upper()} · **Score:** {int(p.health_score)}/100")
         if p.milestones:
-            today_str = str(__import__('datetime').date.today())
-            upcoming = sorted([m for m in p.milestones if m.get("target_date","") >= today_str], key=lambda m: m.get("target_date",""))
+            from datetime import date as _d
+            today_str = _d.today().isoformat()
+            sorted_ms = sorted(p.milestones, key=lambda m: m.get("target_date",""))
+            past = [m for m in sorted_ms if m.get("target_date","") < today_str]
+            upcoming = [m for m in sorted_ms if m.get("target_date","") >= today_str]
             if upcoming:
-                m = upcoming[0]
-                lines.append(f"**Next milestone:** {m['name']} — {m['target_date']}")
+                lines.append(f"**Current milestone:** {upcoming[0]['name']} — {upcoming[0]['target_date']}")
+            if sorted_ms:
+                lines.append(f"**Milestone progress:** {len(past)}/{len(sorted_ms)} passed")
         lines.append("")
         if p.blockers:
             lines.append("**Blockers:**")

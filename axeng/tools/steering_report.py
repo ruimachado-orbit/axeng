@@ -316,16 +316,83 @@ def _build_next_week(card: ProjectCard) -> str | None:
     return " · ".join(parts) if parts else None
 
 
+def _current_milestone(card: ProjectCard) -> dict | None:
+    """Return the active milestone: the earliest upcoming one, or the last passed one."""
+    from datetime import date as _d
+    today = _d.today().isoformat()
+    if not card.milestones:
+        return None
+    sorted_ms = sorted(card.milestones, key=lambda m: m.get("target_date", ""))
+    upcoming = [m for m in sorted_ms if m.get("target_date", "") >= today]
+    if upcoming:
+        return upcoming[0]
+    # All milestones passed — return the last one
+    return sorted_ms[-1] if sorted_ms else None
+
+
+def _build_status_explanation(card: ProjectCard) -> list[str]:
+    """
+    Build a list of specific, evidence-based reasons why a project is at risk
+    or off track. Mirrors the logic from sprint_health.predict_sprint_completion.
+    """
+    reasons: list[str] = []
+    lin = card.linear_signals
+    work = card.work_progress_pct
+    time = card.time_progress_pct
+    gap = work - time  # negative = behind schedule
+
+    # Timeline position
+    if card.days_left is not None and card.days_left < 0:
+        reasons.append(f"Target date passed {abs(card.days_left)}d ago — {int(work)}% complete")
+    elif gap < -20:
+        reasons.append(
+            f"{int(time)}% of time elapsed but only {int(work)}% done "
+            f"— {int(abs(gap))}% behind schedule"
+        )
+    elif gap < -10:
+        reasons.append(f"Slightly behind: {int(work)}% done vs {int(time)}% time elapsed")
+
+    # Velocity vs needed
+    if card.days_left and card.days_left > 0 and lin.velocity > 0:
+        remaining_issues = lin.todo + lin.in_progress
+        needed_velocity = remaining_issues / card.days_left if card.days_left > 0 else 0
+        if needed_velocity > lin.velocity * 1.5:
+            reasons.append(
+                f"Needs {needed_velocity:.2f} issues/day to finish on time "
+                f"but current velocity is {lin.velocity:.2f}/day"
+            )
+    elif lin.velocity == 0 and (lin.todo + lin.in_progress) > 0:
+        reasons.append(f"No velocity — {lin.todo + lin.in_progress} issues unstarted or stalled")
+
+    # Staleness
+    if lin.staleness_rate > 60:
+        reasons.append(
+            f"{int(lin.staleness_rate)}% of open issues not updated in 7+ days"
+            + (f": {lin.top_stale_issues[0]}" if lin.top_stale_issues else "")
+        )
+
+    # Current milestone context
+    ms = _current_milestone(card)
+    if ms:
+        from datetime import date as _d
+        today = _d.today().isoformat()
+        if ms["target_date"] < today:
+            reasons.append(f"Milestone overdue: '{ms['name']}' was due {ms['target_date']}")
+
+    return reasons
+
+
 def _detect_decision(card: ProjectCard) -> str | None:
     """Return a one-line decision prompt if the project needs one, else None."""
     if card.forecast == "blocked_needs_escalation":
         blocker = card.blockers[0] if card.blockers else "blocker"
         return f"Unblock {card.name}: {blocker}"
-    if card.forecast == "unowned_assign_now":
+    # Only fire unowned_assign_now if there are actually unowned issues
+    if card.forecast == "unowned_assign_now" and card.issue_signals.unowned_count > 0:
         return f"Assign owner for {card.name} — {card.issue_signals.unowned_count} unowned issues"
     if card.forecast == "target_date_at_risk" and (card.days_left or 99) < 21:
         return f"Decide: rescope {card.name} or accept date slip ({card.days_left}d left)"
-    if card.eta_risk in ("high", "critical"):
+    if card.eta_risk in ("high", "critical") and card.status != "on_track":
         return f"Review {card.name} timeline — {card.eta_risk} ETA risk"
     return None
 
@@ -605,10 +672,20 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
         # Re-derive eta_risk now that issue signals are included
         card.eta_risk = _compute_eta_risk(card.days_left, card.timeline_position)
 
-    # Build synthesised week summary + next week forecast per project
+    # Build synthesised week summary + next week forecast + status explanation
     for card in project_cards:
         card.week_delta = _build_week_delta(card)
         card.next_week = _build_next_week(card)
+        # Replace generic Linear risk strings with specific evidence-based explanations
+        if card.status in ("at_risk", "off_track"):
+            specific = _build_status_explanation(card)
+            if specific:
+                card.blockers = specific + [
+                    b for b in card.blockers
+                    if not any(generic in b for generic in [
+                        "High staleness", "Low completion", "Low velocity", "Too much WIP"
+                    ])
+                ]
 
     # Sort: off_track first, then at_risk, then on_track; within group by health asc
     _order = {"off_track": 0, "at_risk": 1, "on_track": 2}

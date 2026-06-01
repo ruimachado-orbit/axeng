@@ -1163,21 +1163,83 @@ def dora(days: int = typer.Option(30, "--days", "-d", help="Days to analyze")):
 
 @app.command()
 def report(
-    weekly: bool = typer.Option(False, "--weekly", help="Generate weekly report"),
-    send: bool = typer.Option(False, "--send", help="Send report via Telegram/Email")
+    weekly: bool = typer.Option(False, "--weekly", help="Generate weekly engineering report"),
+    steering: bool = typer.Option(False, "--steering", help="Generate CEO steering document"),
+    send: bool = typer.Option(False, "--send", help="Send report via Email/Telegram after generating"),
+    output_json: bool = typer.Option(False, "--json", help="Print raw JSON to stdout"),
+    week_ending: str = typer.Option(None, "--week-ending", help="ISO date for steering report e.g. 2026-05-30"),
 ):
-    """Generate comprehensive reports"""
-    if not weekly:
-        console.print("[yellow]Tip:[/yellow] Use --weekly to generate weekly report")
-        console.print("Usage: axeng report --weekly [--send]")
-        return
+    """Generate reports — weekly engineering summary or CEO steering document."""
+    if steering:
+        _run_steering_report(send=send, output_json=output_json, week_ending=week_ending)
+    elif weekly:
+        _run_weekly_report(send=send)
+    else:
+        console.print("[yellow]Usage:[/yellow]")
+        console.print("  axeng report --weekly          Weekly engineering report")
+        console.print("  axeng report --steering        CEO steering document")
+        console.print("  axeng report --steering --send Generate + send to recipients")
 
+
+def _run_steering_report(
+    send: bool = False,
+    output_json: bool = False,
+    week_ending: str | None = None,
+) -> None:
+    console.print("[cyan]📊 Generating CEO steering report...[/cyan]")
+    console.print("[dim]This may take a minute — fetching Linear, GitHub Issues, Granola...[/dim]\n")
+
+    try:
+        axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+        cmd = [sys.executable, str(Path(__file__).parent / "tools" / "steering_report.py")]
+
+        if send:
+            cmd.append("--send")
+        if output_json:
+            cmd.append("--json")
+        if week_ending:
+            cmd.extend(["--week-ending", week_ending])
+
+        result = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            timeout=180,
+            env={**os.environ, "AXENG_HOME": axeng_home},
+        )
+
+        if result.stderr:
+            for line in result.stderr.split("\n"):
+                if line.strip():
+                    console.print(f"[dim]{line}[/dim]")
+
+        if result.stdout:
+            console.print(result.stdout)
+
+        if result.returncode != 0:
+            console.print(f"[red]Error:[/red] steering report exited with code {result.returncode}")
+            return
+
+        if send:
+            console.print("\n[green]✓[/green] Steering report sent to recipients.")
+        else:
+            output_dir = Path(os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))) / "reports" / "steering"
+            console.print(f"\n[green]✓[/green] Report saved to {output_dir}")
+            console.print("[dim]Run with --send to deliver to recipients configured in steering.recipients[/dim]")
+
+    except subprocess.TimeoutExpired:
+        console.print("[red]Timeout:[/red] Steering report is taking too long. Try again or check API connectivity.")
+    except Exception as e:
+        console.print(f"[red]Error:[/red] {e}")
+
+
+def _run_weekly_report(send: bool = False) -> None:
     console.print("[cyan]Generating weekly report...[/cyan]\n")
     console.print("[dim]This may take a minute...[/dim]\n")
 
     try:
         axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
-        cmd = ["python3", str(Path(__file__).parent / "tools" / "weekly_report.py")]
+        cmd = [sys.executable, str(Path(__file__).parent / "tools" / "weekly_report.py")]
 
         if send:
             cmd.append("--send")
@@ -1187,16 +1249,14 @@ def report(
             capture_output=True,
             text=True,
             timeout=120,
-            env={**os.environ, "AXENG_HOME": axeng_home}
+            env={**os.environ, "AXENG_HOME": axeng_home},
         )
 
-        # Print the formatted report
         if result.stdout:
             console.print(result.stdout)
 
         if result.stderr:
-            # Print progress messages from stderr
-            for line in result.stderr.split('\n'):
+            for line in result.stderr.split("\n"):
                 if line.strip():
                     console.print(f"[dim]{line}[/dim]")
 

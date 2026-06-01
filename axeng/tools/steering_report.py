@@ -1,0 +1,647 @@
+#!/usr/bin/env python3
+"""
+CEO Steering Report — Portfolio Aggregator
+Assembles per-project data from Linear, GitHub Issues, Granola, and risk signals,
+scores each project, and renders the weekly executive document.
+
+Entry point:  generate_steering_report(week_ending: date | None) -> SteeringReport
+"""
+from __future__ import annotations
+
+import json
+import sys
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+from config import get as cfg_get
+from project_map import build_maps, all_repos, owner_of_project, repos_for_project
+from tools.linear_tool import linear_project_health
+from tools.sprint_health import predict_sprint_completion, calculate_sprint_metrics
+from tools.vacations import who_is_ooo_today
+from tools.github_issues import enrich_with_issue_signals
+from tools.steering_granola import enrich_with_granola
+from tools.steering_render import render_html, render_markdown
+from tools.steering_schema import (
+    CapacitySignals,
+    Confidence,
+    Evidence,
+    EtaRisk,
+    Forecast,
+    IssueSignals,
+    LinearSignals,
+    PortfolioSummary,
+    ProjectCard,
+    Status,
+    SteeringReport,
+    TimelinePosition,
+    TranscriptSignal,
+    report_to_dict,
+)
+
+
+# ── Week boundaries ──────────────────────────────────────────────────────────
+
+def _week_boundaries(week_ending: date | None = None) -> tuple[date, date]:
+    """Return (week_start Monday, week_end Friday) for the report period."""
+    end = week_ending or date.today()
+    # Snap to the most recent Friday
+    days_since_friday = (end.weekday() - 4) % 7
+    friday = end - timedelta(days=days_since_friday)
+    monday = friday - timedelta(days=4)
+    return monday, friday
+
+
+# ── Timeline calculations ────────────────────────────────────────────────────
+
+def _timeline_metrics(start_date_str: str | None, target_date_str: str | None) -> dict:
+    """
+    Compute time_progress_pct, work_progress_pct placeholder, days_left,
+    timeline_position, eta_risk from project dates.
+    Returns a dict of computed fields (work_progress filled later from Linear).
+    """
+    today = date.today()
+    result: dict[str, Any] = {
+        "days_left": None,
+        "time_progress_pct": 0.0,
+        "timeline_position": "on_plan",
+        "eta_risk": "low",
+    }
+
+    if not target_date_str:
+        return result
+
+    try:
+        target = date.fromisoformat(target_date_str[:10])
+        result["days_left"] = (target - today).days
+
+        if start_date_str:
+            start = date.fromisoformat(start_date_str[:10])
+            total_days = (target - start).days
+            elapsed = (today - start).days
+            if total_days > 0:
+                result["time_progress_pct"] = round(min(elapsed / total_days * 100, 100), 1)
+        else:
+            # No start date — estimate from 90-day window
+            assumed_start = target - timedelta(days=90)
+            total_days = 90
+            elapsed = (today - assumed_start).days
+            result["time_progress_pct"] = round(min(max(elapsed / total_days * 100, 0), 100), 1)
+
+    except (ValueError, TypeError):
+        pass
+
+    return result
+
+
+def _compute_timeline_position(time_pct: float, work_pct: float) -> TimelinePosition:
+    gap = work_pct - time_pct
+    if gap >= 5:
+        return "ahead"
+    if gap >= -10:
+        return "on_plan"
+    if gap >= -25:
+        return "behind"
+    return "significantly_behind"
+
+
+def _compute_eta_risk(days_left: int | None, timeline_position: TimelinePosition) -> EtaRisk:
+    if days_left is not None and days_left < 0:
+        return "critical"
+    if timeline_position == "significantly_behind":
+        return "high" if (days_left or 99) > 14 else "critical"
+    if timeline_position == "behind":
+        return "medium"
+    if timeline_position == "ahead":
+        return "low"
+    return "low"
+
+
+# ── Linear → LinearSignals ───────────────────────────────────────────────────
+
+def _extract_linear_signals(project_data: dict) -> LinearSignals:
+    metrics = project_data.get("metrics", {})
+    return LinearSignals(
+        completion_rate=metrics.get("completion_rate", 0.0),
+        staleness_rate=metrics.get("staleness_rate", 0.0),
+        velocity=metrics.get("velocity", 0.0),
+        in_progress=metrics.get("in_progress", 0),
+        todo=metrics.get("todo", 0),
+        completed=metrics.get("completed", 0),
+        top_stale_issues=project_data.get("top_stale_issues", []),
+        risks=project_data.get("risks", []),
+    )
+
+
+# ── Scoring (Phase 4 extends this) ──────────────────────────────────────────
+
+def _score_project(
+    linear: LinearSignals,
+    issues: IssueSignals,
+    time_pct: float,
+    work_pct: float,
+    transcript_signals: list[TranscriptSignal],
+) -> tuple[float, Confidence, Status, Forecast]:
+    """
+    Weighted score using raw signals (not the derived Linear health score).
+    Weights: Linear delivery 35% | timeline alignment 25% | issue risk 20% |
+             transcript 15% | staleness penalty 5%
+    Returns (health_score, confidence, status, forecast).
+    """
+    # Linear delivery component — raw completion + velocity
+    linear_score = (
+        linear.completion_rate * 0.6 +
+        min(linear.velocity * 20, 40)  # cap velocity contribution
+    )
+
+    # Timeline alignment — work ahead/behind calendar
+    gap = work_pct - time_pct          # positive = ahead, negative = behind
+    if gap >= 0:
+        timeline_score = 100.0
+    elif gap >= -15:
+        timeline_score = 100 + gap * 3   # gradual penalty
+    else:
+        timeline_score = max(0, 100 + gap * 5)
+
+    # Issue risk — inverted (high risk = low score)
+    issue_score = max(0, 100 - issues.risk_score)
+
+    # Staleness penalty
+    staleness_score = max(0, 100 - linear.staleness_rate)
+
+    # Weighted total
+    health_score = (
+        linear_score * 0.35 +
+        timeline_score * 0.25 +
+        issue_score * 0.20 +
+        staleness_score * 0.05
+    )
+
+    # Transcript modifier — urgent tone caps status at at_risk regardless of score
+    urgent_transcript = any(
+        ts.confidence_tone == "urgent" for ts in transcript_signals
+    )
+    has_transcript_blockers = any(
+        ts.blockers for ts in transcript_signals
+    )
+    if urgent_transcript:
+        health_score = min(health_score, 59)
+
+    health_score = round(min(max(health_score, 0), 100), 1)
+
+    # Status thresholds
+    if health_score >= 75 and not urgent_transcript:
+        status: Status = "on_track"
+    elif health_score >= 50:
+        status = "at_risk"
+    else:
+        status = "off_track"
+
+    # Confidence band
+    if health_score >= 75 and not urgent_transcript and not has_transcript_blockers:
+        confidence: Confidence = "high"
+    elif health_score >= 50:
+        confidence = "medium"
+    else:
+        confidence = "low"
+
+    # Forecast
+    if status == "on_track":
+        forecast: Forecast = "delivering_as_planned"
+    elif issues.unowned_count > 3 or linear.staleness_rate > 60:
+        forecast = "unowned_assign_now"
+    elif urgent_transcript or issues.blocked_threads > 0:
+        forecast = "blocked_needs_escalation"
+    else:
+        forecast = "target_date_at_risk"
+
+    return health_score, confidence, status, forecast
+
+
+# ── Decision detection ───────────────────────────────────────────────────────
+
+def _detect_decision(card: ProjectCard) -> str | None:
+    """Return a one-line CEO decision prompt if the project needs one, else None."""
+    if card.forecast == "blocked_needs_escalation":
+        blocker = card.blockers[0] if card.blockers else "blocker"
+        return f"Unblock {card.name}: {blocker}"
+    if card.forecast == "unowned_assign_now":
+        return f"Assign owner for {card.name} — {card.issue_signals.unowned_count} unowned issues"
+    if card.forecast == "target_date_at_risk" and (card.days_left or 99) < 21:
+        return f"Decide: rescope {card.name} or accept date slip ({card.days_left}d left)"
+    if card.eta_risk in ("high", "critical"):
+        return f"Review {card.name} timeline — {card.eta_risk} ETA risk"
+    return None
+
+
+# ── Bottom line synthesis ────────────────────────────────────────────────────
+
+def _build_bottom_line(projects: list[ProjectCard], decisions: list[dict]) -> str:
+    n_decisions = len(decisions)
+    off_track = [p for p in projects if p.status == "off_track"]
+    at_risk = [p for p in projects if p.status == "at_risk"]
+    on_track = [p for p in projects if p.status == "on_track"]
+
+    if n_decisions == 0 and not off_track:
+        return f"All {len(on_track)} projects are on track. No decisions required this week."
+
+    parts = []
+    if n_decisions:
+        items = " and ".join(d["project"] for d in decisions[:2])
+        suffix = f" (+{n_decisions - 2} more)" if n_decisions > 2 else ""
+        parts.append(f"{n_decisions} decision{'s' if n_decisions > 1 else ''} needed — {items}{suffix}.")
+    if off_track:
+        names = ", ".join(p.name for p in off_track[:2])
+        parts.append(f"{names} {'are' if len(off_track) > 1 else 'is'} off track.")
+    if at_risk and not off_track:
+        names = ", ".join(p.name for p in at_risk[:2])
+        parts.append(f"{names} {'are' if len(at_risk) > 1 else 'is'} at risk.")
+    if on_track:
+        parts.append(f"{len(on_track)} project{'s' if len(on_track) > 1 else ''} on track.")
+
+    return " ".join(parts)
+
+
+# ── Capacity signals ─────────────────────────────────────────────────────────
+
+def _collect_capacity() -> CapacitySignals:
+    try:
+        ooo = who_is_ooo_today()
+        people = [v.get("person", "") for v in ooo.get("vacations", [])]
+        return CapacitySignals(ooo_this_week=people)
+    except Exception:
+        return CapacitySignals()
+
+
+# ── Main assembler ───────────────────────────────────────────────────────────
+
+def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
+    """
+    Assemble the full weekly CEO steering report.
+    Non-fatal errors per source are recorded in report.errors — never abort.
+    """
+    week_start, week_end = _week_boundaries(week_ending)
+    report_id = f"steering-{week_end.isoformat()}"
+    sources: list[str] = []
+    errors: list[str] = []
+
+    print("🏗  Building CEO steering report...", file=sys.stderr)
+
+    # ── 1. Project map ──────────────────────────────────────────────────────
+    try:
+        linear_github_map, _ = build_maps()
+    except Exception as e:
+        errors.append(f"project_map: {e}")
+        linear_github_map = {}
+
+    # ── 2. Linear project health ────────────────────────────────────────────
+    print("  📋 Fetching Linear project health...", file=sys.stderr)
+    linear_projects: list[dict] = []
+    try:
+        health_result = linear_project_health(days=7)
+        linear_projects = health_result.get("projects", [])
+        sources.append("linear")
+    except Exception as e:
+        errors.append(f"linear_project_health: {e}")
+
+    # Build index by name for fast lookup
+    linear_by_name = {p["name"]: p for p in linear_projects}
+
+    # ── 3. Build project cards ──────────────────────────────────────────────
+    print("  🃏 Building project cards...", file=sys.stderr)
+    project_cards: list[ProjectCard] = []
+
+    # Use map as source of truth for configured projects
+    configured_projects = list(linear_github_map.keys()) if linear_github_map else [
+        p["name"] for p in linear_projects
+    ]
+
+    for proj_name in configured_projects:
+        map_entry = linear_github_map.get(proj_name, {})
+        lin_data = linear_by_name.get(proj_name, {})
+
+        # Dates from Linear
+        target_date = lin_data.get("target_date")
+        start_date = lin_data.get("start_date")   # may be absent — patched in Phase 1 note
+
+        # Timeline
+        tl = _timeline_metrics(start_date, target_date)
+        linear_signals = _extract_linear_signals(lin_data)
+        work_pct = linear_signals.completion_rate
+        time_pct = tl["time_progress_pct"]
+
+        tl["timeline_position"] = _compute_timeline_position(time_pct, work_pct)
+        tl["eta_risk"] = _compute_eta_risk(tl["days_left"], tl["timeline_position"])
+
+        # Score (issue signals + transcript filled in later phases)
+        dummy_issues = IssueSignals()
+        health_score, confidence, status, forecast = _score_project(
+            linear_signals, dummy_issues, time_pct, work_pct, []
+        )
+
+        # Blockers from linear risks + stale issues
+        blockers: list[str] = list(linear_signals.risks)
+        if linear_signals.top_stale_issues:
+            blockers.append(
+                f"{len(linear_signals.top_stale_issues)} stale issues: "
+                + ", ".join(linear_signals.top_stale_issues[:2])
+            )
+
+        # Evidence
+        evidence: list[Evidence] = []
+        for risk in linear_signals.risks:
+            evidence.append(Evidence(source="linear", text=risk, severity="warning"))
+        if not lin_data:
+            evidence.append(Evidence(
+                source="linear",
+                text=f"No Linear data found for project '{proj_name}'",
+                severity="warning",
+            ))
+
+        card = ProjectCard(
+            name=proj_name,
+            owner=map_entry.get("owner", lin_data.get("lead", "Unassigned")),
+            linear_project_id=lin_data.get("id"),
+            repos=map_entry.get("repos", []),
+            status=status,
+            health_score=health_score,
+            confidence=confidence,
+            forecast=forecast,
+            target_date=target_date,
+            start_date=start_date,
+            days_left=tl["days_left"],
+            time_progress_pct=time_pct,
+            work_progress_pct=work_pct,
+            timeline_position=tl["timeline_position"],
+            eta_risk=tl["eta_risk"],
+            linear_signals=linear_signals,
+            issue_signals=dummy_issues,
+            blockers=blockers,
+            evidence=evidence,
+        )
+        project_cards.append(card)
+
+    # ── 4. GitHub Issues enrichment ─────────────────────────────────────────
+    try:
+        project_cards = enrich_with_issue_signals(project_cards, week_start.isoformat())
+        sources.append("github_issues")
+    except Exception as e:
+        errors.append(f"github_issues: {e}")
+
+    # ── 5. Granola transcript enrichment ────────────────────────────────────
+    cross_project_signals: list[dict] = []
+    try:
+        project_cards, cross_project_signals = enrich_with_granola(
+            project_cards, week_start.isoformat()
+        )
+        sources.append("granola")
+    except Exception as e:
+        errors.append(f"granola: {e}")
+
+    # ── 6. Re-score with all signals now populated ───────────────────────────
+    print("  🧮 Scoring projects...", file=sys.stderr)
+    for card in project_cards:
+        health_score, confidence, status, forecast = _score_project(
+            card.linear_signals,
+            card.issue_signals,
+            card.time_progress_pct,
+            card.work_progress_pct,
+            card.transcript_signals,
+        )
+        card.health_score = health_score
+        card.confidence = confidence
+        card.status = status
+        card.forecast = forecast
+        # Re-derive eta_risk now that issue signals are included
+        card.eta_risk = _compute_eta_risk(card.days_left, card.timeline_position)
+
+    # Sort: off_track first, then at_risk, then on_track; within group by health asc
+    _order = {"off_track": 0, "at_risk": 1, "on_track": 2}
+    project_cards.sort(key=lambda c: (_order[c.status], c.health_score))
+
+    # ── 7. Capacity ─────────────────────────────────────────────────────────
+    print("  🏖  Checking capacity...", file=sys.stderr)
+    capacity = _collect_capacity()
+
+    # ── 8. Decisions ────────────────────────────────────────────────────────
+    decisions: list[dict] = []
+    for card in project_cards:
+        card.decision_needed = _detect_decision(card)
+        if card.decision_needed:
+            decisions.append({
+                "project": card.name,
+                "owner": card.owner,
+                "text": card.decision_needed,
+                "status": card.status,
+                "eta_risk": card.eta_risk,
+            })
+
+    # ── 9. Cross-project risks ──────────────────────────────────────────────
+    cross_project_risks: list[str] = []
+    for sig in cross_project_signals:
+        for blocker in sig.get("blockers", []):
+            cross_project_risks.append(f"[{sig['title']}] {blocker}")
+        for risk in sig.get("risks", []):
+            cross_project_risks.append(f"[{sig['title']}] {risk}")
+
+    # ── 10. Portfolio summary ────────────────────────────────────────────────
+    summary = PortfolioSummary(
+        total_projects=len(project_cards),
+        on_track=sum(1 for c in project_cards if c.status == "on_track"),
+        at_risk=sum(1 for c in project_cards if c.status == "at_risk"),
+        off_track=sum(1 for c in project_cards if c.status == "off_track"),
+        decisions_needed=len(decisions),
+        top_risk=_build_bottom_line(project_cards, decisions),
+    )
+
+    report = SteeringReport(
+        report_id=report_id,
+        generated_at=datetime.now().isoformat(),
+        week_start=week_start.isoformat(),
+        week_end=week_end.isoformat(),
+        portfolio_summary=summary,
+        projects=project_cards,
+        decisions_needed=decisions,
+        cross_project_risks=cross_project_risks,
+        capacity_signals=capacity,
+        sources=sources,
+        errors=errors,
+    )
+
+    # ── 11. Render ──────────────────────────────────────────────────────────
+    print("  🖨  Rendering report...", file=sys.stderr)
+    try:
+        report.rendered_markdown = render_markdown(report)
+    except Exception as e:
+        errors.append(f"markdown_render: {e}")
+
+    try:
+        report.rendered_html = render_html(report)
+    except Exception as e:
+        errors.append(f"html_render: {e}")
+
+    print(f"✅ Steering report ready: {len(project_cards)} projects, "
+          f"{len(decisions)} decisions needed", file=sys.stderr)
+    return report
+
+
+# ── Persistence ──────────────────────────────────────────────────────────────
+
+def save_report(report: SteeringReport) -> dict[str, Path]:
+    """
+    Save the report to ~/.axeng/reports/steering/ (or configured output_dir).
+    Returns {json: path, md: path, html: path}.
+    """
+    output_dir = Path(
+        cfg_get("steering.output_dir", "~/.axeng/reports/steering")
+    ).expanduser()
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    stem = report.report_id   # "steering-2026-05-30"
+    paths: dict[str, Path] = {}
+
+    # JSON — structured data, loadable by API
+    json_path = output_dir / f"{stem}.json"
+    json_path.write_text(
+        json.dumps(report_to_dict(report), indent=2, default=str),
+        encoding="utf-8",
+    )
+    paths["json"] = json_path
+
+    # Markdown — CLI output and Telegram
+    if report.rendered_markdown:
+        md_path = output_dir / f"{stem}.md"
+        md_path.write_text(report.rendered_markdown, encoding="utf-8")
+        paths["md"] = md_path
+
+    # HTML — email body and browser view
+    if report.rendered_html:
+        html_path = output_dir / f"{stem}.html"
+        html_path.write_text(report.rendered_html, encoding="utf-8")
+        paths["html"] = html_path
+
+    # Update rolling index file for API listing
+    _update_index(output_dir, report)
+
+    print(f"📁 Saved to {output_dir}", file=sys.stderr)
+    return paths
+
+
+def _update_index(output_dir: Path, report: SteeringReport) -> None:
+    """Keep reports/steering/index.json up-to-date for API listing."""
+    index_path = output_dir / "index.json"
+    try:
+        index: list[dict] = json.loads(index_path.read_text()) if index_path.exists() else []
+    except Exception:
+        index = []
+
+    entry = {
+        "id": report.report_id,
+        "week_end": report.week_end,
+        "week_start": report.week_start,
+        "generated_at": report.generated_at,
+        "title": f"CEO Steering — {report.week_end}",
+        "type": "steering",
+        "summary": report.portfolio_summary.top_risk or "",
+        "projects": report.portfolio_summary.total_projects,
+        "decisions": report.portfolio_summary.decisions_needed,
+        "sources": report.sources,
+    }
+
+    # Replace existing entry for same week, or prepend
+    index = [e for e in index if e.get("id") != report.report_id]
+    index.insert(0, entry)
+    # Keep last 52 weeks
+    index = index[:52]
+
+    index_path.write_text(json.dumps(index, indent=2), encoding="utf-8")
+
+
+def send_report(report: SteeringReport, paths: dict[str, Path]) -> bool:
+    """
+    Send the report via configured channel.
+    Tries Gmail (HTML email) first, falls back to Telegram (Markdown excerpt).
+    Never raises — failures are logged and return False.
+    """
+    import os, subprocess
+
+    recipients: list = cfg_get("steering.recipients", [])
+
+    # ── Gmail HTML email ────────────────────────────────────────────────────
+    html_path = paths.get("html")
+    if html_path and recipients:
+        gmail_script = cfg_get(
+            "email.gmail_script",
+            "~/.axeng/skills/productivity/google-workspace/scripts/google_api.py"
+        )
+        gmail_path = Path(gmail_script).expanduser()
+        if gmail_path.exists():
+            subject = f"Engineering Update — {report.week_end}"
+            for recipient in recipients:
+                try:
+                    result = subprocess.run(
+                        [
+                            sys.executable, str(gmail_path),
+                            "gmail", "send",
+                            "--to", recipient,
+                            "--subject", subject,
+                            "--html", str(html_path),
+                        ],
+                        capture_output=True, text=True, timeout=30,
+                    )
+                    if result.returncode == 0:
+                        print(f"✉️  Sent to {recipient}", file=sys.stderr)
+                    else:
+                        print(f"⚠️  Gmail send failed for {recipient}: {result.stderr[:200]}", file=sys.stderr)
+                except Exception as e:
+                    print(f"⚠️  Gmail error: {e}", file=sys.stderr)
+
+    # ── Telegram Markdown fallback ──────────────────────────────────────────
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    if token and chat_id and report.rendered_markdown:
+        excerpt = report.rendered_markdown[:4000]
+        try:
+            result = subprocess.run(
+                [
+                    "curl", "-s", "-X", "POST",
+                    f"https://api.telegram.org/bot{token}/sendMessage",
+                    "-d", f"chat_id={chat_id}",
+                    "-d", f"text={excerpt}",
+                    "-d", "parse_mode=Markdown",
+                ],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode == 0:
+                print("📨 Sent via Telegram", file=sys.stderr)
+                return True
+        except Exception as e:
+            print(f"⚠️  Telegram error: {e}", file=sys.stderr)
+
+    return bool(html_path and recipients)
+
+
+# ── CLI entry ────────────────────────────────────────────────────────────────
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate CEO steering report")
+    parser.add_argument("--json", action="store_true", help="Output raw JSON to stdout")
+    parser.add_argument("--send", action="store_true", help="Send via email/Telegram after saving")
+    parser.add_argument("--week-ending", help="ISO date e.g. 2026-05-30")
+    args = parser.parse_args()
+
+    week_end_date = date.fromisoformat(args.week_ending) if args.week_ending else None
+    report = generate_steering_report(week_end_date)
+    paths = save_report(report)
+
+    if args.send:
+        send_report(report, paths)
+
+    if args.json:
+        print(json.dumps(report_to_dict(report), indent=2, default=str))
+    else:
+        print(report.rendered_markdown or "")

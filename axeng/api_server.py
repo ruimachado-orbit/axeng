@@ -111,6 +111,82 @@ async def get_issues():
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.get("/api/reports/steering")
+async def list_steering_reports():
+    """List all generated CEO steering reports (newest first)."""
+    try:
+        from pathlib import Path
+        from config import get as cfg_get
+
+        output_dir = Path(cfg_get("steering.output_dir", "~/.axeng/reports/steering")).expanduser()
+        index_path = output_dir / "index.json"
+
+        if not index_path.exists():
+            return {"reports": [], "count": 0}
+
+        import json
+        index = json.loads(index_path.read_text())
+        return {"reports": index, "count": len(index)}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/reports/steering/latest")
+async def get_latest_steering_report():
+    """Return the most recently generated CEO steering report (full JSON)."""
+    try:
+        from pathlib import Path
+        from config import get as cfg_get
+
+        output_dir = Path(cfg_get("steering.output_dir", "~/.axeng/reports/steering")).expanduser()
+        index_path = output_dir / "index.json"
+
+        if not index_path.exists():
+            raise HTTPException(status_code=404, detail="No steering reports found")
+
+        import json
+        index = json.loads(index_path.read_text())
+        if not index:
+            raise HTTPException(status_code=404, detail="No steering reports found")
+
+        latest_id = index[0]["id"]
+        report_path = output_dir / f"{latest_id}.json"
+        if not report_path.exists():
+            raise HTTPException(status_code=404, detail=f"Report file missing: {latest_id}.json")
+
+        return json.loads(report_path.read_text())
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/reports/steering/{report_id}")
+async def get_steering_report(report_id: str):
+    """Return a specific CEO steering report by ID (e.g. steering-2026-05-30)."""
+    try:
+        from pathlib import Path
+        from config import get as cfg_get
+        import re
+
+        # Sanitise to prevent path traversal
+        if not re.fullmatch(r"steering-\d{4}-\d{2}-\d{2}", report_id):
+            raise HTTPException(status_code=400, detail="Invalid report ID format")
+
+        output_dir = Path(cfg_get("steering.output_dir", "~/.axeng/reports/steering")).expanduser()
+        report_path = output_dir / f"{report_id}.json"
+
+        if not report_path.exists():
+            raise HTTPException(status_code=404, detail=f"Report not found: {report_id}")
+
+        import json
+        return json.loads(report_path.read_text())
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.get("/status")
 async def get_status():
     """Check service health"""

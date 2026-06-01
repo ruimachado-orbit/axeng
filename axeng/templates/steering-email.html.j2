@@ -1,0 +1,590 @@
+{#
+  CEO Steering Report — Email Template
+  ─────────────────────────────────────────────────────────────────────────────
+  This is the default template shipped with Axeng.
+
+  To customise it:
+    1. mkdir -p ~/.axeng/templates
+    2. cp <axeng-root>/axeng/templates/steering-email.html.j2 \
+             ~/.axeng/templates/steering-email.html.j2
+    3. Edit that copy — changes persist across upgrades.
+    4. Run  axeng report --steering  — your template is picked up automatically.
+
+  Template language: Jinja2  (https://jinja.palletsprojects.com/)
+  Constraints:
+    • Inline CSS only — Gmail strips <style> blocks.
+    • Table-based layout — required for Outlook / Apple Mail compatibility.
+    • No JavaScript, no external fonts, no remote images.
+
+  Available variables — see axeng/tools/steering_schema.py for full shapes:
+    report.week_label          "Week of 26 May 2026"
+    report.week_end            "2026-05-30"
+    report.generated_at        ISO datetime string
+    report.recipient_name      from config steering.recipients[0], or "CEO"
+    report.bottom_line         one-sentence executive summary (string)
+    report.decisions           list of {project, owner, text, status, eta_risk}
+    report.projects            list of ProjectCard dicts — fields below:
+      p.name  p.owner  p.status  p.status_label  p.status_color
+      p.health_score  p.confidence  p.forecast
+      p.target_date  p.days_left
+      p.time_progress_pct  p.work_progress_pct  p.timeline_position
+      p.eta_risk  p.blockers  p.wins  p.week_delta
+      p.decision_needed  p.meeting_signal
+    report.cross_project_risks list of strings
+    report.ooo                 list of names
+    report.sources             list of signal source names used
+    report.errors              list of non-fatal collection errors
+
+  ─────────────────────────────────────────────────────────────────────────────
+  CUSTOMISATION EXAMPLES
+  ─────────────────────────────────────────────────────────────────────────────
+  • Change accent colour: find ACCENT_COLOR and replace #1d4ed8 with your brand colour.
+  • Add company logo: uncomment the logo block in the HEADER section below.
+  • Add a manual "CEO context" section: uncomment the MANUAL CONTEXT block.
+  • Remove a section: wrap it in {% if false %} … {% endif %}.
+  • Reorder sections: cut-paste the section comment blocks.
+  ─────────────────────────────────────────────────────────────────────────────
+#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="x-apple-disable-message-reformatting">
+<title>Engineering Update — {{ report.week_label }}</title>
+</head>
+
+{# ─── DESIGN TOKENS (edit these to retheme the whole document) ─────────────── #}
+{%- set ACCENT_COLOR   = "#1d4ed8" -%}
+{%- set DANGER_COLOR   = "#dc2626" -%}
+{%- set WARNING_COLOR  = "#d97706" -%}
+{%- set SUCCESS_COLOR  = "#16a34a" -%}
+{%- set MUTED_COLOR    = "#6b7280" -%}
+{%- set BG_COLOR       = "#f9fafb" -%}
+{%- set CARD_BG        = "#ffffff" -%}
+{%- set BORDER_COLOR   = "#e5e7eb" -%}
+{%- set TEXT_COLOR     = "#111827" -%}
+{%- set FONT_BODY      = "Georgia, 'Times New Roman', serif" -%}
+{%- set FONT_MONO      = "'Courier New', Courier, monospace" -%}
+{%- set MAX_WIDTH      = "660px" -%}
+
+{# Status colours helper #}
+{%- macro status_color(status) -%}
+  {%- if status == "off_track" %}{{ DANGER_COLOR }}
+  {%- elif status == "at_risk" %}{{ WARNING_COLOR }}
+  {%- else %}{{ SUCCESS_COLOR }}
+  {%- endif %}
+{%- endmacro -%}
+
+{%- macro status_label(status) -%}
+  {%- if status == "off_track" %}OFF TRACK
+  {%- elif status == "at_risk" %}AT RISK
+  {%- else %}ON TRACK
+  {%- endif %}
+{%- endmacro -%}
+
+{%- macro eta_badge(eta_risk) -%}
+  {%- if eta_risk == "critical" %}🔴 Critical
+  {%- elif eta_risk == "high" %}🟠 High
+  {%- elif eta_risk == "medium" %}🟡 Medium
+  {%- else %}🟢 Low
+  {%- endif %}
+{%- endmacro -%}
+
+<body style="margin:0;padding:0;background-color:{{ BG_COLOR }};font-family:{{ FONT_BODY }};color:{{ TEXT_COLOR }};">
+
+{# ════════════════════════════════════════════════════════════════════════════
+   OUTER WRAPPER
+   ════════════════════════════════════════════════════════════════════════════ #}
+<table width="100%" cellpadding="0" cellspacing="0" border="0"
+       style="background-color:{{ BG_COLOR }};padding:24px 0 48px;">
+  <tr>
+    <td align="center">
+      <table width="{{ MAX_WIDTH }}" cellpadding="0" cellspacing="0" border="0"
+             style="max-width:{{ MAX_WIDTH }};width:100%;">
+
+{# ════════════════════════════════════════════════════════════════════════════
+   HEADER
+   ════════════════════════════════════════════════════════════════════════════ #}
+        <tr>
+          <td style="padding:0 0 24px;">
+
+            {# Optional logo — uncomment and replace src to activate:
+            <img src="https://example.com/logo.png" alt="Company" width="120"
+                 style="display:block;margin-bottom:16px;"> #}
+
+            <p style="margin:0 0 4px;font-size:11px;color:{{ MUTED_COLOR }};
+                      letter-spacing:0.08em;text-transform:uppercase;
+                      font-family:Arial,Helvetica,sans-serif;">
+              Confidential &middot; {{ report.week_label }}
+            </p>
+            <h1 style="margin:0 0 6px;font-size:28px;font-weight:400;
+                       color:{{ TEXT_COLOR }};font-family:{{ FONT_BODY }};
+                       letter-spacing:-0.02em;">
+              Engineering Update
+            </h1>
+            <p style="margin:0;font-size:13px;color:{{ MUTED_COLOR }};
+                      font-family:Arial,Helvetica,sans-serif;">
+              Prepared for {{ report.recipient_name }}
+              &nbsp;&middot;&nbsp;
+              Generated {{ report.generated_at[:10] }}
+            </p>
+          </td>
+        </tr>
+
+{# ════════════════════════════════════════════════════════════════════════════
+   BOTTOM LINE  — always the first thing the CEO reads
+   ════════════════════════════════════════════════════════════════════════════ #}
+        <tr>
+          <td style="padding:0 0 20px;">
+            <table width="100%" cellpadding="16" cellspacing="0" border="0"
+                   style="background-color:#fffbeb;border-left:4px solid {{ WARNING_COLOR }};
+                          border-radius:4px;">
+              <tr>
+                <td>
+                  <p style="margin:0 0 6px;font-size:11px;font-weight:700;
+                             color:#92400e;text-transform:uppercase;
+                             letter-spacing:0.08em;
+                             font-family:Arial,Helvetica,sans-serif;">
+                    Bottom Line
+                  </p>
+                  <p style="margin:0;font-size:16px;line-height:1.6;
+                             color:{{ TEXT_COLOR }};">
+                    {{ report.bottom_line }}
+                  </p>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+{# ════════════════════════════════════════════════════════════════════════════
+   DECISIONS NEEDED  — only rendered when decisions exist
+   ════════════════════════════════════════════════════════════════════════════ #}
+{% if report.decisions %}
+        <tr>
+          <td style="padding:0 0 24px;">
+            <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;
+                       color:{{ TEXT_COLOR }};text-transform:uppercase;
+                       letter-spacing:0.08em;
+                       font-family:Arial,Helvetica,sans-serif;">
+              Decisions Needed This Week
+            </h2>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="border:1px solid {{ BORDER_COLOR }};border-radius:6px;
+                          background:{{ CARD_BG }};overflow:hidden;">
+{% for d in report.decisions %}
+              <tr style="border-bottom:{{ '1px solid ' + BORDER_COLOR if not loop.last else 'none' }};">
+                <td style="padding:14px 16px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td style="width:10px;vertical-align:top;padding-top:2px;">
+                        <span style="display:inline-block;width:8px;height:8px;
+                                     border-radius:50%;
+                                     background-color:{{ status_color(d.status) }};
+                                     margin-right:8px;"></span>
+                      </td>
+                      <td>
+                        <p style="margin:0 0 3px;font-size:14px;font-weight:600;
+                                   color:{{ TEXT_COLOR }};">
+                          {{ d.project }}
+                          <span style="font-weight:400;color:{{ MUTED_COLOR }};
+                                       font-size:12px;margin-left:8px;">
+                            {{ d.owner }}
+                          </span>
+                        </p>
+                        <p style="margin:0;font-size:13px;color:{{ TEXT_COLOR }};
+                                   line-height:1.5;">
+                          {{ d.text }}
+                        </p>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+{% endfor %}
+            </table>
+          </td>
+        </tr>
+{% endif %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+   PORTFOLIO SUMMARY TABLE  — one line per project
+   ════════════════════════════════════════════════════════════════════════════ #}
+        <tr>
+          <td style="padding:0 0 24px;">
+            <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;
+                       color:{{ TEXT_COLOR }};text-transform:uppercase;
+                       letter-spacing:0.08em;
+                       font-family:Arial,Helvetica,sans-serif;">
+              Portfolio — {{ report.projects | length }} Projects
+            </h2>
+            <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="border:1px solid {{ BORDER_COLOR }};border-radius:6px;
+                          background:{{ CARD_BG }};overflow:hidden;
+                          font-family:Arial,Helvetica,sans-serif;font-size:12px;">
+              {# Header row #}
+              <tr style="background:#f3f4f6;">
+                <td style="padding:8px 12px;font-weight:600;color:{{ MUTED_COLOR }};
+                            text-transform:uppercase;letter-spacing:0.06em;width:28%;">
+                  Project
+                </td>
+                <td style="padding:8px 12px;font-weight:600;color:{{ MUTED_COLOR }};
+                            text-transform:uppercase;letter-spacing:0.06em;width:16%;">
+                  Owner
+                </td>
+                <td style="padding:8px 12px;font-weight:600;color:{{ MUTED_COLOR }};
+                            text-transform:uppercase;letter-spacing:0.06em;width:32%;">
+                  Progress
+                </td>
+                <td style="padding:8px 12px;font-weight:600;color:{{ MUTED_COLOR }};
+                            text-transform:uppercase;letter-spacing:0.06em;width:12%;">
+                  Status
+                </td>
+                <td style="padding:8px 12px;font-weight:600;color:{{ MUTED_COLOR }};
+                            text-transform:uppercase;letter-spacing:0.06em;width:12%;">
+                  Target
+                </td>
+              </tr>
+{% for p in report.projects %}
+  {%- set work = p.work_progress_pct | int -%}
+  {%- set time = p.time_progress_pct | int -%}
+  {%- set behind = (time - work) > 10 -%}
+  {%- set bar_color = DANGER_COLOR if p.status == 'off_track' else (WARNING_COLOR if p.status == 'at_risk' else SUCCESS_COLOR) -%}
+              <tr style="border-top:1px solid {{ BORDER_COLOR }};">
+                <td style="padding:10px 12px;font-weight:600;color:{{ TEXT_COLOR }};">
+                  {{ p.name }}
+                </td>
+                <td style="padding:10px 12px;color:{{ MUTED_COLOR }};">
+                  {{ p.owner }}
+                </td>
+                <td style="padding:10px 12px;">
+                  {# Timeline bar: work progress fill + time cursor marker #}
+                  <table width="180" cellpadding="0" cellspacing="0" border="0"
+                         style="display:inline-table;">
+                    <tr>
+                      {# Completed work (coloured) #}
+                      {%- if work > 0 %}
+                      <td width="{{ [work * 1.8, 180] | min | int }}"
+                          height="8"
+                          style="background-color:{{ bar_color }};
+                                 border-radius:4px 0 0 4px;"></td>
+                      {%- endif %}
+                      {# Remaining work (grey) #}
+                      {%- if work < 100 %}
+                      <td width="{{ [(100 - work) * 1.8, 180] | min | int }}"
+                          height="8"
+                          style="background-color:#e5e7eb;
+                                 border-radius:{{ '0' if work > 0 else '4px' }} 4px 4px {{ '0' if work > 0 else '4px' }};"></td>
+                      {%- endif %}
+                    </tr>
+                  </table>
+                  {# Time cursor line #}
+                  <table width="180" cellpadding="0" cellspacing="0" border="0"
+                         style="display:inline-table;margin-top:2px;">
+                    <tr>
+                      <td width="{{ [time * 1.8, 176] | min | int }}" height="2"
+                          style="background:transparent;"></td>
+                      <td width="2" height="2"
+                          style="background-color:#9ca3af;"></td>
+                      <td height="2" style="background:transparent;"></td>
+                    </tr>
+                  </table>
+                  <span style="font-size:10px;color:{{ MUTED_COLOR }};margin-left:6px;">
+                    {{ work }}% done
+                    {%- if behind %} · {{ time - work }}% behind schedule{%- endif %}
+                  </span>
+                </td>
+                <td style="padding:10px 12px;">
+                  <span style="display:inline-block;padding:2px 7px;border-radius:3px;
+                               font-size:10px;font-weight:700;letter-spacing:0.04em;
+                               color:#fff;background-color:{{ bar_color }};">
+                    {{ status_label(p.status) }}
+                  </span>
+                </td>
+                <td style="padding:10px 12px;font-size:11px;color:{{ MUTED_COLOR }};white-space:nowrap;">
+                  {% if p.target_date %}{{ p.target_date }}
+                  {% if p.days_left is not none %}
+                  <br><span style="color:{{ DANGER_COLOR if p.days_left < 14 else MUTED_COLOR }};">
+                    {{ p.days_left }}d left
+                  </span>
+                  {% endif %}
+                  {% else %}—{% endif %}
+                </td>
+              </tr>
+{% endfor %}
+            </table>
+          </td>
+        </tr>
+
+{# ════════════════════════════════════════════════════════════════════════════
+   PROJECT CARDS  — detail per project, sorted by risk
+   ════════════════════════════════════════════════════════════════════════════ #}
+        <tr>
+          <td style="padding:0 0 8px;">
+            <h2 style="margin:0 0 12px;font-size:13px;font-weight:700;
+                       color:{{ TEXT_COLOR }};text-transform:uppercase;
+                       letter-spacing:0.08em;
+                       font-family:Arial,Helvetica,sans-serif;">
+              Project Detail
+            </h2>
+          </td>
+        </tr>
+
+{% for p in report.projects %}
+  {%- set bar_color = DANGER_COLOR if p.status == 'off_track' else (WARNING_COLOR if p.status == 'at_risk' else SUCCESS_COLOR) -%}
+        <tr>
+          <td style="padding:0 0 12px;">
+            <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                   style="border:1px solid {{ bar_color }};border-radius:6px;
+                          background:{{ CARD_BG }};overflow:hidden;">
+
+              {# Card header #}
+              <tr>
+                <td style="padding:12px 16px;background-color:{{ bar_color }};">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td>
+                        <span style="font-size:15px;font-weight:700;color:#fff;
+                                     font-family:Arial,Helvetica,sans-serif;">
+                          {{ p.name }}
+                        </span>
+                        <span style="font-size:12px;color:rgba(255,255,255,0.8);
+                                     margin-left:10px;
+                                     font-family:Arial,Helvetica,sans-serif;">
+                          {{ p.owner }}
+                        </span>
+                      </td>
+                      <td align="right">
+                        <span style="font-size:11px;font-weight:700;color:#fff;
+                                     letter-spacing:0.06em;
+                                     font-family:Arial,Helvetica,sans-serif;">
+                          {{ status_label(p.status) }}
+                          &nbsp;&middot;&nbsp;
+                          {{ p.health_score | int }}/100
+                        </span>
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              {# Timeline row #}
+              <tr>
+                <td style="padding:10px 16px;border-bottom:1px solid {{ BORDER_COLOR }};
+                            background:#f9fafb;">
+                  <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                         style="font-family:Arial,Helvetica,sans-serif;font-size:12px;">
+                    <tr>
+                      <td style="color:{{ MUTED_COLOR }};width:70%;">
+                        Timeline:
+                        <strong>{{ p.work_progress_pct | int }}% done</strong>
+                        &nbsp;/&nbsp;
+                        {{ p.time_progress_pct | int }}% of calendar elapsed
+                        &nbsp;&middot;&nbsp;
+                        ETA risk: {{ eta_badge(p.eta_risk) }}
+                      </td>
+                      <td align="right" style="color:{{ MUTED_COLOR }};">
+                        {% if p.target_date %}
+                          Target: <strong>{{ p.target_date }}</strong>
+                          {% if p.days_left is not none %}
+                          &nbsp;({{ p.days_left }}d left)
+                          {% endif %}
+                        {% else %}
+                          No target date set
+                        {% endif %}
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+              </tr>
+
+              {# Blocker row — only if blockers exist #}
+{% if p.blockers %}
+              <tr>
+                <td style="padding:10px 16px;border-bottom:1px solid {{ BORDER_COLOR }};">
+                  <p style="margin:0 0 5px;font-size:11px;font-weight:700;
+                             color:{{ MUTED_COLOR }};text-transform:uppercase;
+                             letter-spacing:0.06em;
+                             font-family:Arial,Helvetica,sans-serif;">
+                    Blockers
+                  </p>
+{% for b in p.blockers[:3] %}
+                  <p style="margin:0 0 3px;font-size:13px;color:{{ TEXT_COLOR }};
+                             line-height:1.4;">
+                    &bull; {{ b }}
+                  </p>
+{% endfor %}
+                </td>
+              </tr>
+{% endif %}
+
+              {# Meeting signal — only if present #}
+{% if p.meeting_signal %}
+              <tr>
+                <td style="padding:10px 16px;border-bottom:1px solid {{ BORDER_COLOR }};
+                            background:#f0f9ff;">
+                  <p style="margin:0 0 4px;font-size:11px;font-weight:700;
+                             color:#0369a1;text-transform:uppercase;
+                             letter-spacing:0.06em;
+                             font-family:Arial,Helvetica,sans-serif;">
+                    From Meetings
+                  </p>
+                  <p style="margin:0;font-size:13px;color:{{ TEXT_COLOR }};
+                             font-style:italic;line-height:1.4;">
+                    {{ p.meeting_signal }}
+                  </p>
+                </td>
+              </tr>
+{% endif %}
+
+              {# Week delta — only if present #}
+{% if p.week_delta %}
+              <tr>
+                <td style="padding:10px 16px;border-bottom:{% if p.decision_needed %}1px solid {{ BORDER_COLOR }}{% else %}none{% endif %};">
+                  <p style="margin:0 0 4px;font-size:11px;font-weight:700;
+                             color:{{ MUTED_COLOR }};text-transform:uppercase;
+                             letter-spacing:0.06em;
+                             font-family:Arial,Helvetica,sans-serif;">
+                    This Week
+                  </p>
+                  <p style="margin:0;font-size:13px;color:{{ TEXT_COLOR }};
+                             line-height:1.4;">
+                    {{ p.week_delta }}
+                  </p>
+                </td>
+              </tr>
+{% endif %}
+
+              {# Decision needed — highlighted action row #}
+{% if p.decision_needed %}
+              <tr>
+                <td style="padding:10px 16px;background-color:#fefce8;">
+                  <p style="margin:0 0 4px;font-size:11px;font-weight:700;
+                             color:#854d0e;text-transform:uppercase;
+                             letter-spacing:0.06em;
+                             font-family:Arial,Helvetica,sans-serif;">
+                    Action Needed
+                  </p>
+                  <p style="margin:0;font-size:13px;color:#1c1917;
+                             font-weight:600;line-height:1.4;">
+                    {{ p.decision_needed }}
+                  </p>
+                </td>
+              </tr>
+{% endif %}
+
+            </table>
+          </td>
+        </tr>
+{% endfor %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+   CROSS-PROJECT RISKS  — unattributed Granola signals + risk radar
+   ════════════════════════════════════════════════════════════════════════════ #}
+{% if report.cross_project_risks %}
+        <tr>
+          <td style="padding:8px 0 20px;">
+            <h2 style="margin:0 0 10px;font-size:13px;font-weight:700;
+                       color:{{ TEXT_COLOR }};text-transform:uppercase;
+                       letter-spacing:0.08em;
+                       font-family:Arial,Helvetica,sans-serif;">
+              Cross-Project Signals
+            </h2>
+            <table width="100%" cellpadding="12" cellspacing="0" border="0"
+                   style="border:1px solid {{ BORDER_COLOR }};border-radius:6px;
+                          background:{{ CARD_BG }};">
+              <tr>
+                <td>
+{% for risk in report.cross_project_risks %}
+                  <p style="margin:0 0 5px;font-size:13px;color:{{ TEXT_COLOR }};
+                             line-height:1.5;">
+                    &bull; {{ risk }}
+                  </p>
+{% endfor %}
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+{% endif %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+   CAPACITY  — OOO this week
+   ════════════════════════════════════════════════════════════════════════════ #}
+{% if report.ooo %}
+        <tr>
+          <td style="padding:0 0 20px;">
+            <h2 style="margin:0 0 10px;font-size:13px;font-weight:700;
+                       color:{{ TEXT_COLOR }};text-transform:uppercase;
+                       letter-spacing:0.08em;
+                       font-family:Arial,Helvetica,sans-serif;">
+              Team Capacity
+            </h2>
+            <table width="100%" cellpadding="12" cellspacing="0" border="0"
+                   style="border:1px solid {{ BORDER_COLOR }};border-radius:6px;
+                          background:{{ CARD_BG }};">
+              <tr>
+                <td style="font-family:Arial,Helvetica,sans-serif;font-size:13px;
+                            color:{{ TEXT_COLOR }};">
+                  Out of office this week:
+                  <strong>{{ report.ooo | join(", ") }}</strong>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+{% endif %}
+
+{# ════════════════════════════════════════════════════════════════════════════
+   MANUAL CONTEXT BLOCK  — uncomment and fill in before sending
+   ════════════════════════════════════════════════════════════════════════════ #}
+{#
+        <tr>
+          <td style="padding:0 0 20px;">
+            <h2 style="margin:0 0 10px;font-size:13px;font-weight:700;
+                       color:{{ TEXT_COLOR }};text-transform:uppercase;
+                       letter-spacing:0.08em;
+                       font-family:Arial,Helvetica,sans-serif;">
+              Additional Context
+            </h2>
+            <table width="100%" cellpadding="14" cellspacing="0" border="0"
+                   style="border:1px solid {{ ACCENT_COLOR }};border-radius:6px;
+                          background:#eff6ff;">
+              <tr>
+                <td style="font-size:14px;color:{{ TEXT_COLOR }};line-height:1.6;">
+                  Edit this section in ~/.axeng/templates/steering-email.html.j2
+                  before running  axeng report --steering --send
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+#}
+
+{# ════════════════════════════════════════════════════════════════════════════
+   FOOTER
+   ════════════════════════════════════════════════════════════════════════════ #}
+        <tr>
+          <td style="padding:24px 0 0;border-top:1px solid {{ BORDER_COLOR }};">
+            <p style="margin:0;font-size:11px;color:{{ MUTED_COLOR }};
+                      line-height:1.6;text-align:center;
+                      font-family:Arial,Helvetica,sans-serif;">
+              Generated by Axeng &middot; {{ report.generated_at[:16] | replace("T", " ") }}
+              &middot; Signals: {{ report.sources | join(", ") }}
+              {% if report.errors %}
+              <br><span style="color:{{ WARNING_COLOR }};">
+                Partial data: {{ report.errors | join("; ") }}
+              </span>
+              {% endif %}
+            </p>
+          </td>
+        </tr>
+
+      </table>
+    </td>
+  </tr>
+</table>
+
+</body>
+</html>

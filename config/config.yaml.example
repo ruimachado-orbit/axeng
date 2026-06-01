@@ -95,6 +95,26 @@ linear:
 
 
 # ───────────────────────────────────────────────────────────────
+# CEO STEERING REPORT
+# Weekly executive document — lands in the CEO's inbox every Friday.
+# Generated from Linear + GitHub Issues + Granola meeting notes.
+# ───────────────────────────────────────────────────────────────
+steering:
+  # Who receives the email (CEO, EA, or both)
+  recipients:
+    - "ceo@example.com"
+
+  # Day of week to generate and send (0=Monday, 4=Friday)
+  weekday: 4
+
+  # Timezone for week boundary
+  timezone: "Europe/Lisbon"
+
+  # Where to save generated JSON + HTML reports
+  output_dir: "~/.axeng/reports/steering"
+
+
+# ───────────────────────────────────────────────────────────────
 # REPORTING
 # ───────────────────────────────────────────────────────────────
 reporting:

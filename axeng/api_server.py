@@ -113,7 +113,7 @@ async def get_issues():
 
 @app.get("/api/reports/steering")
 async def list_steering_reports():
-    """List all generated CEO steering reports (newest first)."""
+    """List all generated steering reports (newest first)."""
     try:
         from pathlib import Path
         from config import get as cfg_get
@@ -133,7 +133,7 @@ async def list_steering_reports():
 
 @app.get("/api/reports/steering/latest")
 async def get_latest_steering_report():
-    """Return the most recently generated CEO steering report (full JSON)."""
+    """Return the most recently generated steering report (full JSON)."""
     try:
         from pathlib import Path
         from config import get as cfg_get
@@ -163,7 +163,7 @@ async def get_latest_steering_report():
 
 @app.get("/api/reports/steering/{report_id}")
 async def get_steering_report(report_id: str):
-    """Return a specific CEO steering report by ID (e.g. steering-2026-05-30)."""
+    """Return a specific steering report by ID (e.g. steering-2026-05-30)."""
     try:
         from pathlib import Path
         from config import get as cfg_get

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CEO Steering Report — HTML + Markdown Renderer
+Steering Report — HTML + Markdown Renderer
 Loads the Jinja2 template (user copy first, default fallback) and renders
 the SteeringReport into email-safe HTML and plain Markdown.
 
@@ -50,15 +50,15 @@ def _build_template_context(report: SteeringReport) -> dict:
     recipients: list = cfg_get("steering.recipients", [])
     if recipients:
         raw = recipients[0]
-        # "John Doe <john@co.com>" → "John Doe", "john@co.com" → "CEO"
+        # "John Doe <john@co.com>" → "John Doe", "john@co.com" → "Recipient"
         if "<" in raw:
             d["recipient_name"] = raw.split("<")[0].strip()
         elif "@" in raw:
-            d["recipient_name"] = "CEO"
+            d["recipient_name"] = "Recipient"
         else:
             d["recipient_name"] = raw
     else:
-        d["recipient_name"] = "CEO"
+        d["recipient_name"] = "Recipient"
 
     # OOO list (flat names)
     d["ooo"] = report.capacity_signals.ooo_this_week

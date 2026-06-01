@@ -1164,12 +1164,12 @@ def dora(days: int = typer.Option(30, "--days", "-d", help="Days to analyze")):
 @app.command()
 def report(
     weekly: bool = typer.Option(False, "--weekly", help="Generate weekly engineering report"),
-    steering: bool = typer.Option(False, "--steering", help="Generate CEO steering document"),
+    steering: bool = typer.Option(False, "--steering", help="Generate steering document"),
     send: bool = typer.Option(False, "--send", help="Send report via Email/Telegram after generating"),
     output_json: bool = typer.Option(False, "--json", help="Print raw JSON to stdout"),
     week_ending: str = typer.Option(None, "--week-ending", help="ISO date for steering report e.g. 2026-05-30"),
 ):
-    """Generate reports — weekly engineering summary or CEO steering document."""
+    """Generate reports — weekly engineering summary or steering document."""
     if steering:
         _run_steering_report(send=send, output_json=output_json, week_ending=week_ending)
     elif weekly:
@@ -1177,7 +1177,7 @@ def report(
     else:
         console.print("[yellow]Usage:[/yellow]")
         console.print("  axeng report --weekly          Weekly engineering report")
-        console.print("  axeng report --steering        CEO steering document")
+        console.print("  axeng report --steering        steering document")
         console.print("  axeng report --steering --send Generate + send to recipients")
 
 
@@ -1186,7 +1186,7 @@ def _run_steering_report(
     output_json: bool = False,
     week_ending: str | None = None,
 ) -> None:
-    console.print("[cyan]📊 Generating CEO steering report...[/cyan]")
+    console.print("[cyan]📊 Generating steering report...[/cyan]")
     console.print("[dim]This may take a minute — fetching Linear, GitHub Issues, Granola...[/dim]\n")
 
     try:
@@ -1278,7 +1278,7 @@ def schedule(
     uninstall: bool = typer.Option(False, "--uninstall", help="Remove steering report cron job"),
     status: bool = typer.Option(False, "--status", help="Show current schedule"),
 ):
-    """Manage weekly automation — install/remove the Friday CEO steering report cron job."""
+    """Manage weekly automation — install/remove the Friday steering report cron job."""
     if not any([install, uninstall, status]):
         console.print("[yellow]Usage:[/yellow]")
         console.print("  axeng schedule --install    Install Friday 7am cron job")

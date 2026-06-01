@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CEO Steering Report — Portfolio Aggregator
+Steering Report — Portfolio Aggregator
 Assembles per-project data from Linear, GitHub Issues, Granola, and risk signals,
 scores each project, and renders the weekly executive document.
 
@@ -25,9 +25,11 @@ from tools.sprint_health import (
 )
 from tools.vacations import who_is_ooo_today
 from tools.github_issues import enrich_with_issue_signals
+from tools.github_activity import github_commits_summary
 from tools.steering_granola import enrich_with_granola
 from tools.steering_render import render_html, render_markdown
 from tools.steering_schema import (
+    CommitSignals,
     SprintSignals,
     CapacitySignals,
     Confidence,
@@ -237,7 +239,7 @@ def _score_project(
 # ── Decision detection ───────────────────────────────────────────────────────
 
 def _detect_decision(card: ProjectCard) -> str | None:
-    """Return a one-line CEO decision prompt if the project needs one, else None."""
+    """Return a one-line decision prompt if the project needs one, else None."""
     if card.forecast == "blocked_needs_escalation":
         blocker = card.blockers[0] if card.blockers else "blocker"
         return f"Unblock {card.name}: {blocker}"
@@ -293,7 +295,7 @@ def _collect_capacity() -> CapacitySignals:
 
 def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
     """
-    Assemble the full weekly CEO steering report.
+    Assemble the full weekly steering report.
     Non-fatal errors per source are recorded in report.errors — never abort.
     """
     week_start, week_end = _week_boundaries(week_ending)
@@ -301,7 +303,7 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
     sources: list[str] = []
     errors: list[str] = []
 
-    print("🏗  Building CEO steering report...", file=sys.stderr)
+    print("🏗  Building steering report...", file=sys.stderr)
 
     # ── 1. Project map ──────────────────────────────────────────────────────
     try:
@@ -437,7 +439,7 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
         project_cards.append(card)
 
     # ── 4. Attach velocity context to project cards ─────────────────────────
-    # sprint_velocity is team-wide — labelled clearly so CEO doesn't read it
+    # sprint_velocity is team-wide — labelled clearly so nobody read it
     # as project-specific. A declining trend compounds any per-project risk.
     if sprint_signals.velocity_trend == "declining":
         for card in project_cards:
@@ -460,7 +462,40 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
                 severity="info",
             ))
 
-    # ── 6. GitHub Issues enrichment ─────────────────────────────────────────
+    # ── 6. Commit signals ───────────────────────────────────────────────────
+    print("  📦 Fetching commit signals...", file=sys.stderr)
+    try:
+        commits_data = github_commits_summary(days=7)
+        by_repo: dict[str, int] = {
+            repo: info.get("count", 0)
+            for repo, info in commits_data.get("by_repo", {}).items()
+        }
+        for card in project_cards:
+            if not card.repos:
+                continue
+            active = [r for r in card.repos if by_repo.get(r, 0) > 0]
+            quiet = [r for r in card.repos if by_repo.get(r, 0) == 0]
+            total = sum(by_repo.get(r, 0) for r in card.repos)
+            card.commit_signals = CommitSignals(
+                commits_this_week=total,
+                active_repos=active,
+                quiet_repos=quiet,
+            )
+            if total > 0:
+                card.wins.append(f"{total} commit{'s' if total > 1 else ''} this week")
+            elif card.repos:
+                card.evidence.append(Evidence(
+                    source="github_issues",
+                    text=f"No commits in {len(card.repos)} repo(s) this week",
+                    severity="warning",
+                ))
+                if not card.week_delta:
+                    card.week_delta = "No commits this week — code activity silent"
+        sources.append("github_commits")
+    except Exception as e:
+        errors.append(f"github_commits: {e}")
+
+    # ── 7. GitHub Issues enrichment ─────────────────────────────────────────
     try:
         project_cards = enrich_with_issue_signals(project_cards, week_start.isoformat())
         sources.append("github_issues")
@@ -621,7 +656,7 @@ def _update_index(output_dir: Path, report: SteeringReport) -> None:
         "week_end": report.week_end,
         "week_start": report.week_start,
         "generated_at": report.generated_at,
-        "title": f"CEO Steering — {report.week_end}",
+        "title": f"Steering — {report.week_end}",
         "type": "steering",
         "summary": report.portfolio_summary.top_risk or "",
         "projects": report.portfolio_summary.total_projects,
@@ -721,7 +756,7 @@ def send_report(report: SteeringReport, paths: dict[str, Path]) -> bool:
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description="Generate CEO steering report")
+    parser = argparse.ArgumentParser(description="Generate steering report")
     parser.add_argument("--json", action="store_true", help="Output raw JSON to stdout")
     parser.add_argument("--send", action="store_true", help="Send via email/Telegram after saving")
     parser.add_argument("--week-ending", help="ISO date e.g. 2026-05-30")

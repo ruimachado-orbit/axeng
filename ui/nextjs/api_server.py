@@ -322,7 +322,7 @@ def _steering_output_dir() -> Path:
 
 @app.get("/api/reports/steering")
 def steering_reports_list():
-    """List all generated CEO steering reports (newest first)."""
+    """List all generated steering reports (newest first)."""
     output_dir = _steering_output_dir()
     index_path = output_dir / "index.json"
     if not index_path.exists():
@@ -336,7 +336,7 @@ def steering_reports_list():
 
 @app.get("/api/reports/steering/latest")
 def steering_report_latest():
-    """Return the most recently generated CEO steering report."""
+    """Return the most recently generated steering report."""
     from fastapi import HTTPException
     output_dir = _steering_output_dir()
     index_path = output_dir / "index.json"
@@ -353,7 +353,7 @@ def steering_report_latest():
 
 @app.get("/api/reports/steering/{report_id}")
 def steering_report_by_id(report_id: str):
-    """Return a specific CEO steering report by ID e.g. steering-2026-05-30."""
+    """Return a specific steering report by ID e.g. steering-2026-05-30."""
     import re
     from fastapi import HTTPException
     if not re.fullmatch(r"steering-\d{4}-\d{2}-\d{2}", report_id):

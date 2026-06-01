@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-CEO Steering Report — Schema
+Steering Report — Schema
 Defines the data contract for the weekly executive document.
 All other steering modules produce and consume these dataclasses.
 """
@@ -41,6 +41,13 @@ class TranscriptSignal:
 
 
 # ── GitHub Issues ────────────────────────────────────────────────────────────
+
+@dataclass
+class CommitSignals:
+    commits_this_week: int = 0
+    active_repos: list[str] = field(default_factory=list)   # repos with ≥1 commit
+    quiet_repos: list[str] = field(default_factory=list)    # repos with 0 commits
+
 
 @dataclass
 class IssueSignals:
@@ -121,13 +128,14 @@ class ProjectCard:
     # Signals
     linear_signals: LinearSignals = field(default_factory=LinearSignals)
     issue_signals: IssueSignals = field(default_factory=IssueSignals)
+    commit_signals: CommitSignals = field(default_factory=CommitSignals)
     transcript_signals: list[TranscriptSignal] = field(default_factory=list)
 
-    # CEO-facing outputs
+    # outputs
     blockers: list[str] = field(default_factory=list)
     wins: list[str] = field(default_factory=list)
     week_delta: str | None = None         # "2 issues closed, 5 opened — backlog growing"
-    decision_needed: str | None = None    # null = no action needed from CEO
+    decision_needed: str | None = None    # null = no action needed
     meeting_signal: str | None = None     # one-liner from latest relevant Granola note
 
     # Traceability

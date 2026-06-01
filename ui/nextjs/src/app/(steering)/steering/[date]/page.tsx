@@ -1,6 +1,6 @@
 'use client'
 
-// CEO Steering — report detail page.
+// Steering — report detail page.
 // Renders the stored HTML directly (iframe-isolated) or falls back to
 // structured rendering from JSON if HTML is not available.
 import { useEffect, useState } from 'react'
@@ -126,7 +126,7 @@ export default function SteeringReportPage() {
         <iframe
           srcDoc={report.rendered_html}
           style={{ flex: 1, border: 'none', width: '100%' }}
-          title={`CEO Steering Report — ${report.week_end}`}
+          title={`Steering Report — ${report.week_end}`}
         />
       </div>
     )

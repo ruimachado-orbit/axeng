@@ -1,6 +1,6 @@
 'use client'
 
-// CEO Steering — index page: list of available weekly reports
+// Steering — index page: list of available weekly reports
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
 
@@ -42,7 +42,7 @@ export default function SteeringIndexPage() {
       </h1>
       <p style={{ margin: '0 0 32px', fontSize: 13, color: '#6b7280',
                   fontFamily: 'Arial, sans-serif' }}>
-        Weekly CEO steering documents
+        Weekly steering documents
       </p>
 
       {loading ? (

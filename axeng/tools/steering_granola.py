@@ -310,6 +310,7 @@ def enrich_with_granola(
                         if b.get("severity") == "high" and b.get("text")
                     ]
                     card.blockers.extend(urgent_blockers)
+                    card.health_signals.extend(signal.risks[:2])
                     card.evidence.append(Evidence(
                         source="granola",
                         text=f"Meeting: {full_title} ({signal.note_date})",

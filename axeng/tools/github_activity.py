@@ -171,16 +171,38 @@ def github_activity(person: str = None, days: int = 7) -> dict:
 def github_commits_summary(days: int = 7) -> dict:
     """Get commit summary grouped by repo."""
     since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    since_dt = datetime.strptime(since, "%Y-%m-%d")
     repos = github_repos()
     by_repo = {}
     
     for repo in repos:
         try:
             commits = gh_api(f"repos/{repo}/commits?since={since}&per_page=100")
+            pulls = gh_api(f"repos/{repo}/pulls?state=closed&sort=updated&direction=desc&per_page=30")
+            recent_pr_titles = []
+            if isinstance(pulls, list):
+                for pr in pulls:
+                    merged_at = pr.get("merged_at")
+                    if not merged_at:
+                        continue
+                    try:
+                        merged_dt = datetime.fromisoformat(merged_at.replace("Z", "+00:00")).replace(tzinfo=None)
+                    except ValueError:
+                        continue
+                    if merged_dt >= since_dt:
+                        title = (pr.get("title") or "").strip()
+                        if title:
+                            recent_pr_titles.append(title)
             if isinstance(commits, list):
                 by_repo[repo] = {
                     "count": len(commits),
-                    "recent": [c.get("sha", "")[:7] for c in commits[:5]]
+                    "recent": [c.get("sha", "")[:7] for c in commits[:5]],
+                    "recent_messages": [
+                        (c.get("commit", {}) or {}).get("message", "").split("\n")[0].strip()
+                        for c in commits[:30]
+                        if ((c.get("commit", {}) or {}).get("message", "").split("\n")[0].strip())
+                    ],
+                    "recent_pr_titles": recent_pr_titles[:10],
                 }
         except Exception:
             pass

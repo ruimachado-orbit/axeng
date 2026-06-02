@@ -375,3 +375,46 @@ def test_save_report_index_deduplicates(tmp_path, monkeypatch):
     index = json.loads((tmp_path / "index.json").read_text())
     ids = [e["id"] for e in index]
     assert ids.count("steering-2026-05-30") == 1
+
+
+def test_linear_project_health_keeps_projects_with_no_issues(monkeypatch):
+    linear = _load("linear_tool_under_test", _ROOT / "tools" / "linear_tool.py")
+
+    def fake_linear_query(query: str, variables: dict = None):
+        if "projectMilestones" in query:
+            return {
+                "data": {
+                    "projects": {
+                        "nodes": [{
+                            "id": "p1",
+                            "name": "Compass",
+                            "state": "planned",
+                            "lead": {"name": "Joao", "email": "joao@example.com"},
+                            "targetDate": "2026-06-30",
+                            "startDate": "2026-06-01",
+                            "projectMilestones": {"nodes": [{"name": "Beta", "targetDate": "2026-06-15"}]},
+                        }]
+                    }
+                }
+            }
+        return {
+            "data": {
+                "projects": {
+                    "nodes": [{
+                        "id": "p1",
+                        "issues": {"nodes": []},
+                    }]
+                }
+            }
+        }
+
+    monkeypatch.setattr(linear, "linear_query", fake_linear_query)
+    result = linear.linear_project_health(days=7)
+
+    assert result["total_projects"] == 1
+    project = result["projects"][0]
+    assert project["name"] == "Compass"
+    assert project["target_date"] == "2026-06-30"
+    assert project["start_date"] == "2026-06-01"
+    assert project["milestones"][0]["name"] == "Beta"
+    assert project["metrics"]["total_issues"] == 0

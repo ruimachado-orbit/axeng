@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import date, datetime
-from typing import Literal
+from typing import Literal, Optional
 
 
 # ── Status / confidence types ────────────────────────────────────────────────
@@ -47,6 +47,8 @@ class CommitSignals:
     commits_this_week: int = 0
     active_repos: list[str] = field(default_factory=list)   # repos with ≥1 commit
     quiet_repos: list[str] = field(default_factory=list)    # repos with 0 commits
+    recent_messages: list[str] = field(default_factory=list)
+    recent_pr_titles: list[str] = field(default_factory=list)
 
 
 @dataclass
@@ -56,8 +58,12 @@ class IssueSignals:
     overdue_count: int = 0        # past milestone / target date
     backlog_growth: int = 0       # created_this_week − closed_this_week
     blocked_threads: int = 0      # body/comments contain blocker keywords
+    opened_this_week: int = 0
+    closed_this_week: int = 0
     top_stale: list[str] = field(default_factory=list)    # ["org/repo#12 — title", ...]
     top_blocked: list[str] = field(default_factory=list)
+    recently_opened: list[str] = field(default_factory=list)
+    recently_closed: list[str] = field(default_factory=list)
     risk_score: float = 0.0       # 0–100, higher = more risk
 
 
@@ -80,14 +86,18 @@ class SprintSignals:
 
 @dataclass
 class LinearSignals:
+    total_issues: int = 0
     completion_rate: float = 0.0  # 0–100 project-level
     staleness_rate: float = 0.0   # 0–100
+    stale_count: int = 0
     velocity: float = 0.0         # issues/day
     in_progress: int = 0
     todo: int = 0
     completed: int = 0
     top_stale_issues: list[str] = field(default_factory=list)
+    focus_issues: list[str] = field(default_factory=list)
     risks: list[str] = field(default_factory=list)
+    recently_completed_titles: list[str] = field(default_factory=list)  # "ID — title" completed this week
 
 
 # ── Evidence item ────────────────────────────────────────────────────────────
@@ -103,11 +113,25 @@ class Evidence:
 # ── Per-project card ─────────────────────────────────────────────────────────
 
 @dataclass
+class ScoreTrend:
+    """Week-over-week score movement — loaded from previous report if available."""
+    previous_score: float | None = None      # health_score from last week's report
+    previous_week_id: str | None = None      # report ID of previous week
+    score: float = 0.0                       # current health_score
+    movement: Literal["up", "down", "flat", "new"] = "new"
+
+    # Pre-computed display fields (not properties — stored for serialization)
+    delta: int = 0                           # score difference vs last week
+    display: str = ""                        # e.g. "↑5", "↓3", "—", "new"
+
+
+@dataclass
 class ProjectCard:
     # Identity
     name: str
     owner: str
     linear_project_id: str | None = None
+    linear_state: str | None = None
     repos: list[str] = field(default_factory=list)
 
     # Status
@@ -115,6 +139,9 @@ class ProjectCard:
     health_score: float = 0.0     # 0–100
     confidence: Confidence = "medium"
     forecast: Forecast = "delivering_as_planned"
+
+    # Trend — populated by comparing with previous week's report
+    score_trend: ScoreTrend | None = None
 
     # Timeline
     target_date: str | None = None       # ISO date
@@ -134,14 +161,21 @@ class ProjectCard:
 
     # outputs
     blockers: list[str] = field(default_factory=list)
+    health_signals: list[str] = field(default_factory=list)
     wins: list[str] = field(default_factory=list)
     week_delta: str | None = None         # "2 issues closed, 5 opened — backlog growing"
+    delivered_bullets: list[str] = field(default_factory=list)
+    planned_bullets: list[str] = field(default_factory=list)
     decision_needed: str | None = None    # null = no action needed
     meeting_signal: str | None = None     # one-liner from latest relevant Granola note
     next_week: str | None = None          # what's committed/planned for next week
 
     # Traceability
     evidence: list[Evidence] = field(default_factory=list)
+
+    # Computed during generation (not a property — stored for serialization)
+    is_inactive: bool = False
+    # Zero velocity + zero commits + zero in-progress — incubation/stalled project
 
 
 # ── Cross-project ─────────────────────────────────────────────────────────────
@@ -158,8 +192,29 @@ class PortfolioSummary:
     on_track: int = 0
     at_risk: int = 0
     off_track: int = 0
+    inactive: int = 0                       # projects with zero velocity + zero commits
     decisions_needed: int = 0
-    top_risk: str | None = None           # one-sentence bottom line
+    top_risk: str | None = None             # one-sentence bottom line
+
+    # Portfolio-level risk narrative (synthesized, not per-project)
+    portfolio_risks: list[str] = field(default_factory=list)
+    # e.g. "3 incubation projects stalled — no measurable progress this week"
+    #      "Ownership gaps in Starfleet and Auria"
+
+    # Top 3 leadership priorities — actionable, ranked
+    leadership_priorities: list[str] = field(default_factory=list)
+    # e.g. "1. Recover Starfleet Gateway timeline — 14d behind schedule"
+    #      "2. Resolve Auria ownership gaps — 4 unowned issues blocking delivery"
+
+
+# ── Inactive project group (rendered as one card) ─────────────────────────────
+
+@dataclass
+class InactiveGroup:
+    """Collapsed view of stalled/incubation projects to reduce noise."""
+    projects: list[str] = field(default_factory=list)       # project names
+    count: int = 0                                          # how many
+    summary: str = ""                                       # e.g. "3 incubation projects — no measurable progress"
 
 
 # ── Top-level report ─────────────────────────────────────────────────────────
@@ -181,6 +236,11 @@ class SteeringReport:
 
     this_week_summary: list[str] = field(default_factory=list)   # portfolio-level what happened
     next_week_summary: list[str] = field(default_factory=list)   # portfolio-level what's coming
+    client_summary: str | None = None                            # plain-language: done + promised to client
+
+    # Portfolio-level insight
+    inactive_group: InactiveGroup | None = None             # collapsed view of stalled projects
+    score_methodology: str = ""                             # brief explainer of how scores work
 
     sources: list[str] = field(default_factory=list)  # which signals were available
     errors: list[str] = field(default_factory=list)   # non-fatal collection failures

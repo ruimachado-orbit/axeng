@@ -269,6 +269,8 @@ def compute_issue_signals(
     unowned: list[str] = []
     overdue: list[str] = []
     blocked: list[str] = []
+    opened_labels: list[str] = []
+    closed_labels: list[str] = []
     created_this_week = 0
     closed_this_week = 0
 
@@ -298,6 +300,7 @@ def compute_issue_signals(
                 try:
                     if datetime.fromisoformat(created.replace("Z", "+00:00")) >= week_start_dt:
                         created_this_week += 1
+                        opened_labels.append(label)
                 except ValueError:
                     pass
 
@@ -308,6 +311,7 @@ def compute_issue_signals(
                 try:
                     if datetime.fromisoformat(closed_at.replace("Z", "+00:00")) >= week_start_dt:
                         closed_this_week += 1
+                        closed_labels.append(_issue_label(issue, repo))
                 except ValueError:
                     pass
 
@@ -329,8 +333,12 @@ def compute_issue_signals(
         overdue_count=len(overdue),
         backlog_growth=backlog_growth,
         blocked_threads=len(blocked),
+        opened_this_week=created_this_week,
+        closed_this_week=closed_this_week,
         top_stale=stale[:3],
         top_blocked=blocked[:3],
+        recently_opened=opened_labels[:5],
+        recently_closed=closed_labels[:5],
         risk_score=round(risk_score, 1),
     )
 
@@ -379,21 +387,13 @@ def enrich_with_issue_signals(
         card.issue_signals = signals
         card.evidence.extend(evidence)
 
-        # Enrich blockers list with top blocked/overdue issues
+        # Enrich true blockers list only with explicit blocked threads.
         if signals.top_blocked:
             card.blockers.extend(signals.top_blocked[:2])
         if signals.overdue_count > 0:
-            card.blockers.append(
+            card.health_signals.append(
                 f"{signals.overdue_count} overdue issue{'s' if signals.overdue_count > 1 else ''}"
             )
-
-        # Week delta string
-        if signals.backlog_growth > 0:
-            card.week_delta = f"Backlog growing: +{signals.backlog_growth} net new issues this week"
-        elif signals.backlog_growth < 0:
-            card.week_delta = f"Backlog shrinking: {abs(signals.backlog_growth)} more closed than opened this week"
-        elif signals.stale_count > 5:
-            card.week_delta = f"{signals.stale_count} issues stale ({STALE_DAYS}+ days without update)"
 
     return project_cards
 

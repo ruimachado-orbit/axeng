@@ -162,26 +162,120 @@ export LLM_PROVIDER_ORDER=ollama,anthropic,openai,groq
 
 ## ⚙️ Configuring Teams & Projects
 
-Edit `config/config.yaml` (created by `axeng configure`):
+Edit `config/config.yaml` (created by `axeng configure`).
+
+### Projects (shared by both reports)
+
+Both the engineering report and the steering report draw from the same project list. Add each project once here:
 
 ```yaml
+linear:
+  project_ids:
+    "Frontend":  "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"  # Linear project ID
+    "Payments":  "yyyyyyyy-yyyy-yyyy-yyyy-yyyyyyyyyyyy"
+
+  projects:
+    "Frontend":
+      repos: ["my-company/web-app"]   # GitHub repos that belong to this project
+      owner: "Jane Smith"             # Lead shown in reports
+    "Payments":
+      repos: ["my-company/payments-api"]
+      owner: "John Doe"
+
 github:
   orgs: ["my-company"]
   name_map:
-    "johndoe": "John Doe"
+    "johndoe": "John Doe"   # GitHub login → display name
+```
 
-linear:
-  project_ids:
-    "Frontend": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-  projects:
-    "Frontend":
-      repos: ["my-company/web-app"]
-      owner: "John Doe"
+To find a Linear project ID: open the project in Linear → copy the UUID from the URL.
+
+---
+
+## 📊 Reports
+
+Axeng produces two separate weekly reports from the same data sources.
+
+### Engineering Report — `axeng report`
+
+Team-facing summary for engineers and EMs. Covers sprint health, DORA metrics, PR activity, individual contributions, and OOO.
+
+```bash
+axeng report          # Generate and print
+axeng report --send   # Generate and send via Telegram/email
+```
+
+Configured under `reporting:` in `config/config.yaml`:
+
+```yaml
+reporting:
+  weekday: 4              # Friday = last day of the report week (0=Mon … 4=Fri)
+  timezone: "Europe/Lisbon"
+  output_dir: "~/.axeng/reports/weekly"
+  show_mvp: true          # Include top-contributor podium
+  show_roadmap_analysis: true
+  post_linear_updates: true  # Write status updates back to Linear projects
 
 email:
-  recipients: ["engineering@mycompany.com"]
+  recipients:             # Engineering report recipients
+    - "engineering@mycompany.com"
   from: "axeng@mycompany.com"
+  gmail_script: "~/.axeng/skills/.../google_api.py"  # Path to Gmail helper
 ```
+
+### Steering Report — `axeng steering`
+
+CEO-facing executive document. Covers delivered outcomes, milestone progress, confidence, blockers, and next-week plan. Uses the same `linear.projects` list.
+
+```bash
+axeng steering          # Generate, save, and print Markdown
+axeng steering --send   # Generate and email to steering.recipients
+axeng steering --json   # Output raw JSON (for API / downstream tooling)
+axeng steering --week-ending 2026-06-06  # Generate for a specific week
+```
+
+Configured under `steering:` in `config/config.yaml`:
+
+```yaml
+steering:
+  recipients:             # Steering report recipients — independent of email.recipients
+    - "ceo@mycompany.com"
+  output_dir: "~/.axeng/reports/steering"   # JSON + MD + HTML saved here
+
+  brand:                  # Optional — customise the email header
+    company: "Acme Corp"
+    tagline:  "Move fast, stay safe"
+    location: "San Francisco"
+    # Colour overrides (hex values):
+    # success: "#16a34a"   # On Track
+    # warning: "#d97706"   # At Risk
+    # danger:  "#dc2626"   # Off Track / Blocked
+```
+
+#### What the steering report shows per project
+
+| Section | Source |
+|---------|--------|
+| **Delivered** | Linear issues completed this week + GitHub issues closed + merged PRs + commits (grouped by theme) |
+| **Next Week** | Granola meeting commitments + Linear in-progress / focus issues + upcoming milestones |
+| **Status / Confidence** | Scoring model (completion rate, velocity, timeline gap, blockers) |
+| **Risks & Signals** | Stale issues, velocity gaps, meeting transcript risk mentions |
+| **Decisions Needed** | Auto-detected from ETA risk, blockers, and unowned critical issues |
+
+On Track projects appear as compact cards (delivered + next week only). At Risk and Off Track projects get full detail cards.
+
+#### Controlling which projects appear in steering
+
+The steering report uses `linear.project_ids` — the same map used by the engineering report. To include or exclude a project:
+
+```yaml
+linear:
+  project_ids:
+    "Frontend":  "xxxxxxxx-..."   # included in both reports
+    # "Experiments": "..."        # commented out = excluded from both
+```
+
+If you need a project in one report but not the other, there is no built-in filter today — include/exclude at the `project_ids` level affects both.
 
 ---
 

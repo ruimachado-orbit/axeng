@@ -4,21 +4,24 @@ Google Workspace API Client
 Handles authentication and API calls for Calendar and Gmail.
 """
 
+import base64
 import json
 import os
 import sys
 from pathlib import Path
 from datetime import datetime
+from email.message import EmailMessage
 
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
-# Scopes for Calendar and Gmail read access
+# Scopes for Calendar access plus Gmail read and send.
 SCOPES = [
     'https://www.googleapis.com/auth/calendar.readonly',
-    'https://www.googleapis.com/auth/gmail.readonly'
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.send',
 ]
 
 # Get paths from environment or use defaults
@@ -130,6 +133,24 @@ def list_gmail_messages(max_results=10, query=''):
     return detailed_messages
 
 
+def send_gmail_message(to: str, subject: str, body: str = '', html: str = ''):
+    """Send a Gmail message with optional HTML body."""
+    creds = get_credentials()
+    service = build('gmail', 'v1', credentials=creds)
+
+    message = EmailMessage()
+    message['To'] = to
+    message['Subject'] = subject
+
+    text_body = body or "HTML report attached in body."
+    message.set_content(text_body)
+    if html:
+        message.add_alternative(html, subtype='html')
+
+    raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+    return service.users().messages().send(userId='me', body={'raw': raw}).execute()
+
+
 def main():
     """CLI entry point."""
     if len(sys.argv) < 2:
@@ -176,6 +197,10 @@ def main():
             # Parse arguments
             max_results = 10
             query = ''
+            to = ''
+            subject = ''
+            body = ''
+            html = ''
 
             i = 3
             while i < len(sys.argv):
@@ -185,11 +210,32 @@ def main():
                 elif sys.argv[i] == '--query' and i + 1 < len(sys.argv):
                     query = sys.argv[i + 1]
                     i += 2
+                elif sys.argv[i] == '--to' and i + 1 < len(sys.argv):
+                    to = sys.argv[i + 1]
+                    i += 2
+                elif sys.argv[i] == '--subject' and i + 1 < len(sys.argv):
+                    subject = sys.argv[i + 1]
+                    i += 2
+                elif sys.argv[i] == '--body' and i + 1 < len(sys.argv):
+                    body = sys.argv[i + 1]
+                    i += 2
+                elif sys.argv[i] == '--html' and i + 1 < len(sys.argv):
+                    html_arg = sys.argv[i + 1]
+                    html_path = Path(html_arg).expanduser()
+                    html = html_path.read_text(encoding='utf-8') if html_path.exists() else html_arg
+                    i += 2
                 else:
                     i += 1
 
-            messages = list_gmail_messages(max_results, query)
-            print(json.dumps(messages, indent=2))
+            if command == 'send':
+                if not to or not subject:
+                    print("gmail send requires --to and --subject", file=sys.stderr)
+                    sys.exit(1)
+                result = send_gmail_message(to=to, subject=subject, body=body, html=html)
+                print(json.dumps({"status": "sent", "id": result.get("id"), "to": to}))
+            else:
+                messages = list_gmail_messages(max_results, query)
+                print(json.dumps(messages, indent=2))
 
         else:
             print(f"Unknown service: {service}", file=sys.stderr)

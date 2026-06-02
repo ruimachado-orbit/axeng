@@ -26,14 +26,18 @@ def load_env():
     else:
         env_file = Path.home() / ".axeng" / ".env"
 
+    # Also check project-level .env (repo root, two levels up from this file)
+    project_env = Path(__file__).parent.parent.parent / ".env"
+
     env = {}
-    if env_file.exists():
-        with open(env_file) as f:
-            for line in f:
-                line = line.strip()
-                if line and "=" in line and not line.startswith("#"):
-                    k, v = line.split("=", 1)
-                    env[k.strip()] = v.strip()
+    for candidate in [env_file, project_env]:
+        if candidate.exists():
+            with open(candidate) as f:
+                for line in f:
+                    line = line.strip()
+                    if line and "=" in line and not line.startswith("#"):
+                        k, v = line.split("=", 1)
+                        env.setdefault(k.strip(), v.strip())
 
     # Also load from environment variables (overrides .env)
     for key in ["LINEAR_API_KEY", "GITHUB_TOKEN"]:
@@ -416,9 +420,6 @@ def linear_project_health(days: int = 30) -> dict:
     for project in projects:
         issues = project.get("issues", {}).get("nodes", [])
 
-        if not issues:
-            continue
-
         # Calculate metrics
         total_issues = len(issues)
         completed = [i for i in issues if i.get("state", {}).get("type") == "completed"]
@@ -488,6 +489,18 @@ def linear_project_health(days: int = 30) -> dict:
             {"name": m.get("name"), "target_date": m.get("targetDate")}
             for m in raw_milestones if m.get("targetDate")
         ]
+        open_issues = [
+            i for i in issues
+            if i.get("state", {}).get("type") in {"started", "unstarted", "backlog"}
+        ]
+        focus_issues = sorted(
+            [i for i in open_issues if (i.get("priority") or 0) > 0],
+            key=lambda i: (i.get("priority") or 99, i.get("updatedAt") or ""),
+        )
+        recently_completed_titles = [
+            i.get("identifier", "") + " — " + i.get("title", "")
+            for i in recent_completed
+        ]
 
         project_data = {
             "name": project.get("name"),
@@ -516,7 +529,12 @@ def linear_project_health(days: int = 30) -> dict:
             "top_stale_issues": [
                 i.get("identifier") + " — " + i.get("title")
                 for i in stale_issues[:3]
-            ]
+            ],
+            "focus_issues": [
+                i.get("identifier") + " — " + i.get("title") + f" (P{i.get('priority')})"
+                for i in focus_issues[:3]
+            ],
+            "recently_completed_titles": recently_completed_titles[:8],
         }
 
         project_health.append(project_data)

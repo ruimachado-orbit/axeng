@@ -17,6 +17,7 @@ from llm_gateway import call_with_fallback, status as llm_status, get_available_
 
 TOOLS_DIR = SCRIPT_DIR / "tools"
 SYSTEM_PROMPT_PATH = SCRIPT_DIR.parent / "prompts" / "engineering-manager-code-act.md"
+STEERING_REPORT_PROMPT_PATH = SCRIPT_DIR.parent / "prompts" / "steering-report-generation-rules.md"
 LAST_SYNC = Path.home() / ".axeng" / "scripts" / "team-intel" / "last-sync.json"
 
 
@@ -32,6 +33,9 @@ def load_system_prompt() -> str:
     """Load the Engineering Manager code-act system prompt with a safe fallback."""
     prompt = read_md(str(SYSTEM_PROMPT_PATH)).strip()
     if prompt:
+        steering_rules = read_md(str(STEERING_REPORT_PROMPT_PATH)).strip()
+        if steering_rules:
+            return prompt + "\n\n" + steering_rules
         return prompt
     return (
         "You are Axeng, an expert Engineering Manager AI assistant. "

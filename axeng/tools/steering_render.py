@@ -75,6 +75,13 @@ def _status_label(status: str) -> str:
 def _status_text_color(status: str) -> str:
     return "#ffffff"
 
+def _confidence_color(confidence: str, t: dict) -> str:
+    return {
+        "high": t["GREEN"],
+        "medium": t["ORANGE"],
+        "low": t["RED"],
+    }.get(str(confidence).lower(), t["MUTED"])
+
 def _eta_label(eta: str) -> str:
     return {"critical": "Critical", "high": "High", "medium": "Medium"}.get(eta, "Low")
 
@@ -145,12 +152,22 @@ def _pill(text: str, color: str, bg: str, border: str | None = None) -> str:
     )
 
 def _progress_bar(work_pct: int, time_pct: int, color: str, t: dict) -> str:
+    """Filled bar = work done; the dark tick = where we *should* be by now (time elapsed).
+
+    The tick is the steering signal: if the fill is left of the tick, the project is
+    behind schedule. Rendered solid and clamped inside the track so it stays visible
+    at both 0% and 100% (a faint, overflowing marker was effectively invisible before).
+    """
+    work = max(0, min(int(work_pct), 100))
+    # Clamp the marker a hair inside the track so it never bleeds past the rounded ends.
+    tick = max(1, min(int(time_pct), 99))
     return (
-        f'<div style="position:relative;height:4px;background:#e5e5e5;border-radius:2px;overflow:visible;">'
-        f'<div style="position:absolute;left:0;top:0;height:100%;width:{work_pct}%;'
-        f'background:{color};border-radius:2px;"></div>'
-        f'<div style="position:absolute;left:{time_pct}%;top:-2px;width:2px;height:8px;'
-        f'background:{t["INK"]};border-radius:1px;opacity:0.3;"></div>'
+        f'<div style="position:relative;height:6px;background:#e5e5e5;border-radius:3px;">'
+        f'<div style="position:absolute;left:0;top:0;height:100%;width:{work}%;'
+        f'background:{color};border-radius:3px;"></div>'
+        # Vertical tick marker for time elapsed — solid, centered on its position.
+        f'<div style="position:absolute;left:{tick}%;top:-3px;margin-left:-1px;width:2px;height:12px;'
+        f'background:{t["INK"]};border-radius:1px;"></div>'
         f'</div>'
     )
 
@@ -244,7 +261,7 @@ def _project_activity_bullets(p: dict) -> tuple[list[str], list[str]]:
 
 # ── Section builders ──────────────────────────────────────────────────────────
 
-def _html_header(report: SteeringReport, recipient: str, week_label: str, t: dict) -> str:
+def _html_header(report: SteeringReport, week_label: str, t: dict) -> str:
     total_projects = len(report.projects or [])
     active_projects = sum(1 for p in report.projects if p.status != "inactive")
     decisions = len(report.decisions_needed or [])
@@ -252,10 +269,12 @@ def _html_header(report: SteeringReport, recipient: str, week_label: str, t: dic
     inner = (
         f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
         f'<tr>'
-        f'<td style="width:44px;vertical-align:top;padding-right:14px;">'
+        f'<td style="width:70px;vertical-align:top;padding-right:14px;">'
         f'<div style="width:44px;height:44px;border:1px solid #111111;border-radius:8px;'
-        f'font-family:{t["FONT_UI"]};font-size:22px;font-weight:800;color:{t["INK"]};'
-        f'line-height:44px;text-align:center;">M</div>'
+        f'background:#111111;display:flex;align-items:center;justify-content:center;overflow:hidden;">'
+        f'<span style="font-family:{t["FONT_UI"]};font-size:22px;font-weight:800;'
+        f'letter-spacing:-0.03em;color:#ffffff;">M</span>'
+        f'</div>'
         f'</td>'
         f'<td style="vertical-align:top;">'
         f'<p style="margin:0 0 4px;font-family:{t["FONT_UI"]};font-size:11px;font-weight:700;'
@@ -266,7 +285,7 @@ def _html_header(report: SteeringReport, recipient: str, week_label: str, t: dic
         f'<h1 style="margin:0 0 4px;font-family:{t["FONT_UI"]};font-size:34px;font-weight:800;'
         f'color:{t["INK"]};letter-spacing:-0.04em;line-height:1.0;">Steering Report</h1>'
         f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:14px;color:{t["MUTED"]};line-height:1.5;">'
-        f'{week_label} · For {recipient} · {active_projects}/{total_projects} active · {attention} need attention · {decisions} decisions'
+        f'{week_label} · {active_projects}/{total_projects} active · {attention} need attention · {decisions} decisions'
         f'</p>'
         f'</td>'
         f'</tr>'
@@ -367,15 +386,17 @@ def _html_stat_card(value: str, hint: str, accent: str | None, t: dict, is_cta: 
     hint_color = "#999999" if has_signal else t["MUTED"]
     card_border = "1px solid #222222" if has_signal else t["BORDER"]
 
+    # Email-safe layout: avoid flexbox (poor client support); use generous padding
+    # and an explicit gap between the number and its label so cards breathe.
     return (
-        f'<td style="width:25%;padding:0 5px;vertical-align:top;height:112px;">'
-        f'<div style="background:{card_bg};border:{card_border};border-radius:8px;padding:16px 14px;'
-        f'height:112px;box-sizing:border-box;display:flex;flex-direction:column;justify-content:space-between;">'
-        f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:34px;font-weight:800;'
-        f'color:{text_color};line-height:1.1;text-align:left;">{value}</p>'
+        f'<td style="width:25%;padding:0 8px;vertical-align:top;">'
+        f'<div style="background:{card_bg};border:{card_border};border-radius:10px;padding:20px 18px;'
+        f'box-sizing:border-box;height:116px;">'
+        f'<p style="margin:0 0 12px;font-family:{t["FONT_UI"]};font-size:36px;font-weight:800;'
+        f'color:{text_color};line-height:1.0;text-align:left;">{value}</p>'
         f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:11px;font-weight:600;'
-        f'color:{hint_color};line-height:1.4;text-align:left;text-transform:uppercase;'
-        f'letter-spacing:0.08em;">{hint}</p>'
+        f'color:{hint_color};line-height:1.45;text-align:left;text-transform:uppercase;'
+        f'letter-spacing:0.07em;">{hint}</p>'
         f'</div></td>'
     )
 
@@ -383,9 +404,12 @@ def _html_stat_card(value: str, hint: str, accent: str | None, t: dict, is_cta: 
 def _html_exec_snapshot(report: SteeringReport, projects: list[dict], t: dict) -> str:
     summary = report.portfolio_summary
     due_soon = sum(1 for p in projects if p.get("days_left") is not None and 0 <= p["days_left"] <= 14)
-    high_eta = sum(1 for p in projects if p.get("eta_risk") in {"high", "critical"})
     inactive = summary.inactive if hasattr(summary, 'inactive') else 0
     active = max(summary.total_projects - inactive, 0)
+    leadership_attention = sum(
+        1 for p in projects
+        if p.get("decision_needed") or p.get("status") == "off_track"
+    )
 
     cards = (
         _html_stat_card(
@@ -395,7 +419,7 @@ def _html_exec_snapshot(report: SteeringReport, projects: list[dict], t: dict) -
         )
         + _html_stat_card(
             str(summary.at_risk + getattr(summary, "off_track", 0)),
-            "Need attention",
+            "At risk",
             t["ORANGE"] if (summary.at_risk + getattr(summary, "off_track", 0)) > 0 else None, t,
         )
         + _html_stat_card(
@@ -404,18 +428,141 @@ def _html_exec_snapshot(report: SteeringReport, projects: list[dict], t: dict) -
             t["ORANGE"] if due_soon > 0 else None, t,
         )
         + _html_stat_card(
-            str(summary.decisions_needed),
-            "Decisions needed",
-            t["RED"] if summary.decisions_needed > 0 else None, t,
-            is_cta=summary.decisions_needed > 0,
+            str(leadership_attention),
+            "Leadership attention",
+            t["RED"] if leadership_attention > 0 else None, t,
+            is_cta=leadership_attention > 0,
         )
     )
 
     return (
         f'<tr><td style="padding-top:20px;">'
         + _eyebrow("Portfolio Health", t)
-        + f'<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-left:-5px;width:calc(100% + 10px);">'
+        + f'<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-left:-8px;width:calc(100% + 16px);">'
         + f'<tr>{cards}</tr></table>'
+        + f'</td></tr>\n'
+    )
+
+
+def _portfolio_health_label(summary: PortfolioSummary) -> tuple[str, str]:
+    if getattr(summary, "off_track", 0) > 0:
+        return "Off Track", "#dc2626"
+    if summary.at_risk > 0:
+        return "At Risk", "#d97706"
+    return "On Track", "#16a34a"
+
+
+def _project_signal_summary(p: dict) -> str:
+    name = p.get("name", "Project")
+    name_html = f"<strong>{name}</strong>"
+    signals = [str(s).strip() for s in (p.get("health_signals") or []) if str(s).strip()]
+    lower_signals = [s.lower() for s in signals]
+
+    if any("no velocity" in s or "no issue transitions" in s for s in lower_signals):
+        return f"{name_html} has no delivery velocity."
+
+    if p.get("days_left") is not None and p["days_left"] < 0:
+        return f"{name_html} milestone missed — {abs(int(p['days_left']))}d past deadline."
+
+    if signals:
+        lead = signals[0].rstrip(".")
+        if lead.lower().startswith(name.lower()):
+            return lead + "."
+        return f"{name_html}: {lead}."
+
+    status = p.get("status", "on_track")
+    if status == "off_track":
+        return f"{name_html} is off track."
+    if status == "at_risk":
+        return f"{name_html} needs delivery attention."
+    return f"{name_html} progressing as planned."
+
+
+def _portfolio_health_groups(projects: list[dict], summary: PortfolioSummary) -> dict[str, list[str]]:
+    critical: list[str] = []
+    warning: list[str] = []
+
+    for p in projects:
+        status = p.get("status")
+        summary_text = _project_signal_summary(p)
+        signal_blob = " ".join(str(s).lower() for s in (p.get("health_signals") or []))
+        if status == "off_track" or "no velocity" in signal_blob or "no issue transitions" in signal_blob:
+            critical.append(summary_text)
+        elif status == "at_risk":
+            warning.append(summary_text)
+
+    positive = [
+        f'<strong>{p.get("name", "Project")}</strong> progressing as planned.'
+        for p in projects
+        if p.get("status") == "on_track"
+    ]
+
+    for risk in summary.portfolio_risks:
+        text = str(risk).strip()
+        if text and text not in warning and text not in critical:
+            warning.append(text.rstrip(".") + ".")
+
+    seen: set[str] = set()
+
+    def _dedupe(items: list[str]) -> list[str]:
+        out: list[str] = []
+        for item in items:
+            key = item.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(item)
+        return out
+
+    return {
+        "critical": _dedupe(critical)[:3],
+        "warning": _dedupe(warning)[:4],
+        "positive": _dedupe(positive)[:3],
+    }
+
+
+def _html_portfolio_health_narrative(report: SteeringReport, projects: list[dict], t: dict) -> str:
+    summary = report.portfolio_summary
+    level, level_color = _portfolio_health_label(summary)
+    groups = _portfolio_health_groups(projects, summary)
+    if not any(groups.values()):
+        return ""
+
+    sections = []
+    labels = [
+        ("critical", "CRITICAL", t["RED"]),
+        ("warning", "WARNING", t["ORANGE"]),
+        ("positive", "POSITIVE", t["GREEN"]),
+    ]
+    for key, label, color in labels:
+        items = groups[key]
+        if not items:
+            continue
+        items_html = "".join(
+            f'<p style="margin:0 0 8px 22px;font-family:{t["FONT_UI"]};font-size:13px;'
+            f'color:{t["INK"]};line-height:1.45;">{item}</p>'
+            for item in items
+        )
+        sections.append(
+            f'<div style="margin-top:16px;">'
+            f'<p style="margin:0 0 10px;font-family:{t["FONT_UI"]};font-size:11px;font-weight:800;'
+            f'letter-spacing:0.16em;text-transform:uppercase;color:{color};">{label}</p>'
+            f'{items_html}'
+            f'</div>'
+        )
+
+    inner = (
+        f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:22px;font-weight:800;'
+        f'color:{t["INK"]};letter-spacing:-0.03em;">'
+        f'Portfolio Health: <span style="color:{level_color};">{level}</span></p>'
+        + "".join(sections)
+    )
+    return (
+        f'<tr><td style="padding-top:20px;">'
+        + f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
+        + f'style="background:#ffffff;border:1px solid #d9d3ca;border-radius:18px;">'
+        + f'<tr><td style="padding:24px 30px 22px;">{inner}</td></tr>'
+        + f'</table>'
         + f'</td></tr>\n'
     )
 
@@ -427,32 +574,30 @@ def _html_decisions(decisions: list[dict], t: dict) -> str:
     rows_html = ""
     for i, d in enumerate(decisions):
         col = _status_color(d.get("status", "on_track"), t)
-        border = f'border-bottom:1px solid #333333;' if i < len(decisions) - 1 else ""
+        border = f'border-bottom:1px solid #2a2a2a;' if i < len(decisions) - 1 else ""
         rows_html += (
-            f'<div style="padding:14px 0;{border}">'
-            f'<div style="display:flex;align-items:baseline;gap:8px;margin-bottom:4px;">'
+            f'<div style="padding:12px 0;{border}">'
+            f'<div style="display:flex;align-items:flex-start;">'
             f'<span style="display:inline-block;width:6px;height:6px;border-radius:50%;'
-            f'background:{col};flex-shrink:0;margin-top:2px;"></span>'
-            f'<span style="font-family:{t["FONT_UI"]};font-size:14px;font-weight:600;color:#ffffff;">{d.get("project","")}</span>'
-            f'<span style="font-family:{t["FONT_UI"]};font-size:11px;color:#999999;">{d.get("owner","")}</span>'
+            f'background:{col};flex:0 0 6px;margin-top:6px;margin-right:12px;"></span>'
+            f'<div style="min-width:0;">'
+            f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:14px;font-weight:700;color:#ffffff;line-height:1.35;">{d.get("project","")}</p>'
+            f'<p style="margin:2px 0 0;font-family:{t["FONT_UI"]};font-size:11px;color:#999999;line-height:1.45;">{d.get("owner","")}</p>'
+            f'<p style="margin:8px 0 0;font-family:{t["FONT_UI"]};font-size:13px;color:#d7d7d7;line-height:1.55;">{d.get("text","")}</p>'
             f'</div>'
-            f'<p style="margin:0 0 0 14px;font-family:{t["FONT_UI"]};font-size:14px;color:#cccccc;line-height:1.5;">{d.get("text","")}</p>'
+            f'</div>'
             f'</div>'
         )
 
     inner = (
         _eyebrow(f'Decisions Needed — {len(decisions)}', t, color=t["RED"])
         + rows_html
-        + f'<div style="margin-top:14px;padding-top:12px;border-top:1px solid #333333;">'
-        + f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:11px;font-weight:600;'
-        + f'color:#999999;text-transform:uppercase;letter-spacing:0.06em;">'
-        + f'Action required this week ↑</p></div>'
     )
     return (
         f'<tr><td style="padding-top:16px;">'
         + f'<table width="100%" cellpadding="0" cellspacing="0" border="0" '
         + f'style="background:#111111;border:1px solid #222222;border-radius:8px;">'
-        + f'<tr><td style="padding:24px;">{inner}</td></tr>'
+        + f'<tr><td style="padding:18px 20px;">{inner}</td></tr>'
         + f'</table>'
         + f'</td></tr>\n'
     )
@@ -526,70 +671,85 @@ def _html_milestone_radar(projects: list[dict], week_start: str, t: dict) -> str
     )
 
 
+def _status_dot(status: str, t: dict) -> str:
+    """Coloured RAG dot for the portfolio table — the at-a-glance steering signal."""
+    color = _status_color(status, t)
+    return (
+        f'<span style="display:inline-block;width:9px;height:9px;border-radius:50%;'
+        f'background:{color};margin-right:8px;vertical-align:middle;"></span>'
+    )
+
+
+def _table_milestone(p: dict) -> str:
+    """The milestone the project is driving toward — the goal column of the table."""
+    cm = p.get("current_milestone") or {}
+    if cm.get("name"):
+        return cm["name"]
+    today = date.today().isoformat()
+    ms = sorted(p.get("milestones") or [], key=lambda m: m.get("target_date", ""))
+    upcoming = [m for m in ms if m.get("target_date", "") >= today]
+    if upcoming:
+        return upcoming[0].get("name", "—")
+    return ms[-1].get("name", "—") if ms else "—"
+
+
 def _html_portfolio_table(projects: list, t: dict) -> str:
+    """Steering-grade portfolio table: status (RAG) · health · trend · milestone · confidence · target.
+
+    This is the board-level scan line — what state each project is in, how healthy,
+    what goal it's driving toward, how confident we are, and when it's due. Decisions
+    and per-project detail live below; this row stays scannable.
+    """
+    cols = ["", "Project", "Health", "Trend", "Milestone", "Confidence", "Target"]
     header = (
         f'<tr style="border-bottom:{t["BORDER_MED"]};">'
         + "".join(
-            f'<td style="padding:8px 12px 10px;font-family:{t["FONT_UI"]};font-size:10px;font-weight:600;'
+            f'<td style="padding:8px 14px 10px 0;font-family:{t["FONT_UI"]};font-size:10px;font-weight:600;'
             f'text-transform:uppercase;letter-spacing:0.08em;color:{t["GHOST"]};">{col}</td>'
-            for col in ["Project", "Delivery", "Score", "Status", "Decision", "Next Milestone"]
+            for col in cols
         )
         + "</tr>\n"
     )
     rows = ""
     for i, p in enumerate(projects):
-        work = int(p.get("work_progress_pct", 0))
-        time_p = int(p.get("time_progress_pct", 0))
-        col = _status_color(p.get("status", "on_track"), t)
+        status = p.get("status", "on_track")
         border = f'border-bottom:1px solid #f0f0f0;' if i < len(projects) - 1 else ""
-
-        bar_w = 110
-        filled_w = min(int(work * bar_w / 100), bar_w)
-        cursor_w = min(int(time_p * bar_w / 100), bar_w - 2)
-        bar = (
-            f'<div style="width:{bar_w}px;">'
-            f'<div style="position:relative;height:4px;background:#e5e5e5;border-radius:2px;">'
-            f'<div style="position:absolute;left:0;top:0;height:100%;width:{filled_w}px;background:{col};border-radius:2px;"></div>'
-            f'<div style="position:absolute;left:{cursor_w}px;top:-1px;width:2px;height:6px;background:#000;border-radius:1px;opacity:0.2;"></div>'
-            f'</div>'
-            f'<p style="margin:3px 0 0;font-family:{t["FONT_UI"]};font-size:10px;color:{t["GHOST"]};">{work}%</p>'
-            f'</div>'
-        )
-        status_pill = _pill(
-            _status_label(p.get("status", "on_track")),
-            "#ffffff",
-            _status_bg(p.get("status", "on_track")),
-            _status_border(p.get("status", "on_track")),
-        )
-
         score = int(p.get("health_score", 0))
         trend = p.get("score_trend") or {}
         trend_display = trend.get("display", "")
         trend_color = {
             "up": t["GREEN"], "down": t["RED"], "flat": t["GHOST"], "new": t["MUTED"]
         }.get(trend.get("movement", "new"), t["GHOST"])
+        movement = trend.get("movement", "new")
+        trend_symbol = {"up": "↑", "down": "↓", "flat": "→", "new": "—"}.get(movement, "—")
+        trend_text = f"{trend_symbol} {abs(int(trend.get('delta', 0) or 0))}" if trend_display and movement in {"up", "down"} else trend_symbol
 
+        confidence = (p.get("confidence") or "medium").capitalize()
+        confidence_color = _confidence_color(confidence, t)
+        milestone = _table_milestone(p)
         target = p.get("target_date") or "—"
-        days = p.get("days_left")
-        days_color = t["RED"] if (days or 99) < 14 else t["GHOST"]
-        days_html = f'<br><span style="font-size:10px;color:{days_color};">{days}d</span>' if days is not None else ""
-        decision = p.get("decision_needed") or "—"
 
         rows += (
             f'<tr style="{border}">'
-            f'<td style="padding:10px 12px;font-family:{t["FONT_UI"]};font-size:13px;font-weight:700;color:{t["INK"]};">'
+            # Status dot
+            f'<td style="padding:11px 8px 11px 0;white-space:nowrap;">{_status_dot(status, t)}</td>'
+            # Project + owner
+            f'<td style="padding:11px 14px 11px 0;font-family:{t["FONT_UI"]};font-size:13px;font-weight:700;color:{t["INK"]};">'
             f'{p.get("name","")}'
-            f'<div style="margin-top:4px;font-size:11px;font-weight:500;color:{t["GHOST"]};">{p.get("owner","")}</div>'
+            f'<div style="margin-top:3px;font-size:11px;font-weight:500;color:{t["GHOST"]};">{p.get("owner","")}</div>'
             f'</td>'
-            f'<td style="padding:10px 12px;">{bar}</td>'
-            f'<td style="padding:10px 12px;font-family:{t["FONT_MONO"]};font-size:12px;font-weight:700;color:{_score_text_color(score)};">{score}'
-            f'<div style="margin-top:4px;font-family:{t["FONT_UI"]};font-size:11px;font-weight:600;color:{trend_color};">{trend_display or "—"}</div>'
-            f'</td>'
-            f'<td style="padding:10px 12px;">'
-            f'{status_pill}'
-            f'</td>'
-            f'<td style="padding:10px 12px;font-family:{t["FONT_UI"]};font-size:12px;color:{t["MUTED"]};max-width:180px;">{decision}</td>'
-            f'<td style="padding:10px 12px;font-family:{t["FONT_MONO"]};font-size:11px;color:{t["MUTED"]};white-space:nowrap;">{target}{days_html}</td>'
+            # Health score
+            f'<td style="padding:11px 14px 11px 0;font-family:{t["FONT_MONO"]};font-size:13px;font-weight:700;'
+            f'color:{_score_text_color(score)};white-space:nowrap;">{score}</td>'
+            # Trend
+            f'<td style="padding:11px 14px 11px 0;font-family:{t["FONT_MONO"]};font-size:12px;font-weight:700;'
+            f'color:{trend_color};white-space:nowrap;">{trend_text}</td>'
+            # Milestone (the goal)
+            f'<td style="padding:11px 14px 11px 0;font-family:{t["FONT_UI"]};font-size:12px;color:{t["TEXT"]};max-width:200px;">{milestone}</td>'
+            # Confidence
+            f'<td style="padding:11px 14px 11px 0;font-family:{t["FONT_UI"]};font-size:12px;font-weight:700;color:{confidence_color};">{confidence}</td>'
+            # Target
+            f'<td style="padding:11px 0;font-family:{t["FONT_MONO"]};font-size:11px;color:{t["MUTED"]};white-space:nowrap;">{target}</td>'
             f'</tr>\n'
         )
 
@@ -601,16 +761,6 @@ def _html_portfolio_table(projects: list, t: dict) -> str:
         f'<tr><td style="padding-top:16px;">'
         + _card(inner, t, padding="20px 24px")
         + f'</td></tr>\n'
-    )
-
-
-def _project_needs_detail(p: dict) -> bool:
-    trend = p.get("score_trend") or {}
-    delta = abs(int(trend.get("delta", 0) or 0))
-    return (
-        p.get("status") != "on_track"
-        or bool(p.get("decision_needed"))
-        or delta >= 8
     )
 
 
@@ -667,6 +817,14 @@ def _html_project_card_compact(p: dict, t: dict) -> str:
         + f'</p></div>'
     )
 
+    goal_progress = (p.get("goal_progress") or "").strip()
+    goal_html = (
+        f'<p style="margin:8px 0 0;font-family:{t["FONT_UI"]};font-size:12px;color:{t["INK"]};'
+        f'line-height:1.5;"><span style="color:{t["GHOST"]};font-weight:600;text-transform:uppercase;'
+        f'letter-spacing:0.06em;font-size:10px;margin-right:6px;">Goal</span>{goal_progress}</p>'
+        if goal_progress else ""
+    )
+
     cols = ""
     if done_bullets:
         items_html = "".join(
@@ -703,7 +861,7 @@ def _html_project_card_compact(p: dict, t: dict) -> str:
             f'</div>'
         )
 
-    inner = header_html + progress_html + body_html
+    inner = header_html + progress_html + goal_html + body_html
     return (
         f'<tr><td style="padding-bottom:8px;">'
         + _card(inner, t, padding="16px 20px")
@@ -715,22 +873,17 @@ def _html_project_card(p: dict, sp_trend: str, t: dict) -> str:
     col = _status_color(p.get("status", "on_track"), t)
     work = int(p.get("work_progress_pct", 0))
     time_pct = int(p.get("time_progress_pct", 0))
-    eta = p.get("eta_risk", "low")
     status = p.get("status", "on_track")
 
     target = p.get("target_date", "")
     days_left = p.get("days_left")
-    target_str = target if target else "No target date"
-    if target and days_left is not None:
-        target_str += f" · {days_left}d left"
 
-    today_str = date.today().isoformat()
     milestones = p.get("milestones") or []
-    sorted_ms = sorted(milestones, key=lambda m: m.get("target_date", ""))
-    upcoming_ms = [m for m in sorted_ms if m.get("target_date", "") >= today_str]
-    past_ms = [m for m in sorted_ms if m.get("target_date", "") < today_str]
+    upcoming_ms = sorted(
+        [m for m in milestones if m.get("target_date", "") >= date.today().isoformat()],
+        key=lambda m: m.get("target_date", ""),
+    )
     next_milestone = upcoming_ms[0] if upcoming_ms else None
-    ms_position = f"{len(past_ms)}/{len(sorted_ms)} milestones passed" if sorted_ms else None
     done_bullets, next_bullets = _project_activity_bullets(p)
     health_signals = p.get("health_signals", [])
     blockers = p.get("blockers", [])
@@ -741,11 +894,14 @@ def _html_project_card(p: dict, sp_trend: str, t: dict) -> str:
     elif sp_trend == "improving":
         vel_note = f'&nbsp; <span style="color:{t["GREEN"]};font-size:10px;font-weight:500;">↑ team velocity</span>'
 
-    attention = "Immediate" if status == "off_track" else "Leadership" if blockers else "Monitor" if health_signals else "None"
-
     # ── Card header with status pill ──────────────────────────────────────────
     card_border = t["BORDER"] if status == "on_track" else f"1px solid {col}33"
-    status_pill = _pill(_status_label(status), _status_text_color(status), _status_bg(status), _status_border(status))
+    detail_status_text = (
+        "At Risk · Act Now" if status == "at_risk"
+        else "Off Track · Escalate" if status == "off_track"
+        else "On Track"
+    )
+    status_pill = _pill(detail_status_text, _status_text_color(status), _status_bg(status), _status_border(status))
 
     # Trend indicator
     score_val = int(p.get("health_score", 0))
@@ -757,205 +913,124 @@ def _html_project_card(p: dict, sp_trend: str, t: dict) -> str:
     }.get(trend_mv, t["GHOST"])
     if trend_disp and trend_mv != "new":
         score_display = (
-            f'<span style="font-family:{t["FONT_MONO"]};font-size:12px;font-weight:700;'
-            f'color:{_score_text_color(score_val)};">{score_val}</span>'
+            f'<span style="font-family:{t["FONT_MONO"]};font-size:14px;font-weight:800;'
+            f'color:{_score_text_color(score_val)};">{score_val}/100</span>'
             f'<span style="font-family:{t["FONT_MONO"]};font-size:10px;font-weight:600;'
-            f'color:{trend_color};margin-left:6px;">{trend_disp}</span>'
-            f'<span style="font-family:{t["FONT_UI"]};font-size:10px;color:{t["GHOST"]};margin-left:2px;">/100</span>'
+            f'color:{trend_color};margin-left:8px;">{trend_disp}</span>'
         )
     else:
         score_display = (
-            f'<span style="font-family:{t["FONT_MONO"]};font-size:12px;font-weight:700;'
-            f'color:{_score_text_color(score_val)};">{score_val}</span>'
-            f'<span style="font-family:{t["FONT_UI"]};font-size:10px;color:{t["GHOST"]};margin-left:2px;">/100</span>'
+            f'<span style="font-family:{t["FONT_MONO"]};font-size:14px;font-weight:800;'
+            f'color:{_score_text_color(score_val)};">{score_val}/100</span>'
         )
 
     header_html = (
         f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
         f'<tr>'
-        f'<td style="vertical-align:middle;">'
-        f'<p style="margin:0 0 4px;font-family:{t["FONT_UI"]};font-size:10px;font-weight:700;letter-spacing:0.12em;text-transform:uppercase;color:{t["GHOST"]};">'
-        f'Project Card</p>'
-        f'<span style="font-family:{t["FONT_UI"]};font-size:16px;font-weight:700;color:{t["INK"]};letter-spacing:-0.01em;">{p.get("name","")}</span>'
-        f'<span style="font-family:{t["FONT_UI"]};font-size:12px;color:{t["MUTED"]};margin-left:10px;">{p.get("owner","")}</span>'
+        f'<td style="vertical-align:middle;padding-right:12px;">'
+        f'<span style="font-family:{t["FONT_UI"]};font-size:18px;font-weight:800;color:{t["INK"]};letter-spacing:-0.02em;">{p.get("name","")}</span>'
+        f'<span style="font-family:{t["FONT_UI"]};font-size:12px;color:{t["MUTED"]};margin-left:10px;line-height:1.4;">{p.get("owner","")}</span>'
         f'</td>'
         f'<td align="right" style="vertical-align:middle;white-space:nowrap;">'
-        + status_pill
-        + f'<span style="margin-left:10px;">{score_display}</span>'
+        + score_display
+        + f'<span style="display:inline-block;margin-left:12px;vertical-align:middle;">{status_pill}</span>'
         + f'</td></tr></table>'
     )
 
-    # ── Timeline strip ────────────────────────────────────────────────────────
-    timeline_html = (
-        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:12px;">'
-        f'<tr>'
-        f'<td style="vertical-align:top;">'
-        + _progress_bar(work, time_pct, col, t)
-        + f'<p style="margin:5px 0 0;font-family:{t["FONT_UI"]};font-size:11px;color:{t["MUTED"]};">'
-        f'<strong style="color:{t["INK"]};">{work}%</strong> done'
-        f' &nbsp;/&nbsp; {time_pct}% elapsed'
-        f' &nbsp;·&nbsp; ETA: <span style="color:{_eta_color(eta, t)};font-weight:600;">{_eta_label(eta)}</span>'
-        + vel_note
-        + f'<br><span style="font-size:10px;color:{t["GHOST"]};">{_forecast_label(p.get("forecast","delivering_as_planned"))}</span>'
-        f'</p></td>'
-        f'<td style="width:160px;text-align:right;vertical-align:top;padding-left:16px;">'
-        f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:12px;color:{t["INK"]};font-weight:600;">{target_str.split("·")[0].strip()}</p>'
-        + (f'<p style="margin:2px 0 0;font-family:{t["FONT_UI"]};font-size:10px;color:{t["MUTED"]};">{target_str.split("·")[1].strip()}</p>' if "·" in target_str else "")
-        + (f'<p style="margin:4px 0 0;font-family:{t["FONT_UI"]};font-size:11px;color:{t["INK"]};font-weight:600;">▸ {next_milestone["name"]}</p><p style="margin:1px 0 0;font-family:{t["FONT_UI"]};font-size:10px;color:{t["GHOST"]};">{next_milestone["target_date"]}</p>' if next_milestone else "")
-        + (f'<p style="margin:2px 0 0;font-family:{t["FONT_UI"]};font-size:10px;color:{t["GHOST"]};">{ms_position}</p>' if ms_position else "")
-        + f'</td></tr></table>'
-    )
+    # ── Milestone + progress summary row ──────────────────────────────────────
+    current_ms = p.get("current_milestone") or next_milestone
+    milestone_text = "No milestone set"
+    if current_ms:
+        ms_td = current_ms.get("target_date")
+        milestone_text = current_ms.get("name", "—")
+        if ms_td:
+            milestone_text += f" — {ms_td}"
+    elif target:
+        milestone_text = f"Target date — {target}"
 
-    # ── Plan snapshot + milestones row ────────────────────────────────────────
-    lin = p.get("linear_signals", {})
-    plan_rows = [
-        ("State",   _project_state_label(p.get("linear_state"))),
-        ("Start",   p.get("start_date") or "Not set"),
-        ("Target",  _date_label(p.get("target_date"))),
-        ("Issues",  f'{lin.get("total_issues",0)} total · {lin.get("completed",0)} done · {lin.get("in_progress",0)} in progress · {lin.get("todo",0)} todo'),
-    ]
-    plan_html = (
+    progress_bits = [f"{work}% complete"]
+    if days_left is not None:
+        if days_left < 0:
+            progress_bits.append(f"{abs(days_left)}d overdue")
+        else:
+            progress_bits.append(f"{days_left}d remaining")
+    elif not target:
+        progress_bits.append("no target date")
+    progress_html = (
+        f'<div style="margin-top:18px;">'
         f'<table width="100%" cellpadding="0" cellspacing="0" border="0">'
-        + "".join(_kv_row(label, value, t) for label, value in plan_rows)
-        + f'</table>'
-    )
-
-    if sorted_ms:
-        ms_items = ""
-        for m in sorted_ms[:5]:
-            is_past = m.get("target_date", "") < today_str
-            ms_items += (
-                f'<p style="margin:0 0 6px;font-family:{t["FONT_UI"]};font-size:12px;color:{t["MUTED"] if is_past else t["TEXT"]};">'
-                f'<span style="color:{t["GHOST"] if is_past else t["INK"]};margin-right:6px;">{"✓" if is_past else "—"}</span>'
-                f'{m.get("name","")}'
-                f'<span style="color:{t["GHOST"]};font-size:10px;margin-left:6px;">{m.get("target_date","")}</span>'
-                f'</p>'
-            )
-        ms_col = (
-            _eyebrow("Milestones", t)
-            + ms_items
-        )
-    else:
-        ms_col = _eyebrow("Milestones", t) + f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:12px;color:{t["GHOST"]};">None in Linear</p>'
-
-    plan_sep = f'<div style="height:1px;background:#f0f0f0;margin-top:14px;"></div>'
-    plan_section = (
-        f'<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;">'
         f'<tr>'
-        f'<td style="width:48%;vertical-align:top;padding-right:16px;">'
-        + _eyebrow("Plan Snapshot", t) + plan_html
+        f'<td style="width:50%;vertical-align:top;padding-right:18px;">'
+        + _eyebrow("Milestone", t)
+        + f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:15px;font-weight:700;'
+        f'color:{t["INK"]};line-height:1.45;">{milestone_text}</p>'
         + f'</td>'
-        f'<td style="width:52%;vertical-align:top;border-left:{t["BORDER"]};padding-left:16px;">'
-        + ms_col
-        + f'</td></tr></table>'
+        f'<td style="width:50%;vertical-align:top;padding-left:18px;">'
+        + _eyebrow("Progress", t)
+        + f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:15px;'
+        f'color:{col};font-weight:700;line-height:1.45;">{" · ".join(progress_bits)}'
+        + f'<span style="color:{t["MUTED"]};font-weight:500;">{vel_note}</span></p>'
+        + f'</td>'
+        f'</tr>'
+        f'</table>'
+        f'</div>'
     )
 
-    # ── Signal rows ───────────────────────────────────────────────────────────
-    signal_rows = ""
-    status_row = (
-        f'<div style="border-top:1px solid #d4d4d4;padding-top:12px;margin-top:12px;">'
-        + _eyebrow("Status", t)
-        + f'<table width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:2px;">'
-        + f'<tr>'
-        + f'<td style="width:33.33%;vertical-align:top;padding-right:10px;">'
-        + f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:11px;color:{t["GHOST"]};text-transform:uppercase;letter-spacing:0.06em;">Trend</p>'
-        + f'<p style="margin:5px 0 0;font-family:{t["FONT_UI"]};font-size:14px;font-weight:700;color:{trend_color};">{trend_disp or "—"}</p>'
-        + f'</td>'
-        + f'<td style="width:33.33%;vertical-align:top;padding-right:10px;">'
-        + f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:11px;color:{t["GHOST"]};text-transform:uppercase;letter-spacing:0.06em;">Attention</p>'
-        + f'<p style="margin:5px 0 0;font-family:{t["FONT_UI"]};font-size:14px;font-weight:700;color:{t["INK"]};">{attention}</p>'
-        + f'</td>'
-        + f'<td style="width:33.33%;vertical-align:top;">'
-        + f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:11px;color:{t["GHOST"]};text-transform:uppercase;letter-spacing:0.06em;">Decision</p>'
-        + f'<p style="margin:5px 0 0;font-family:{t["FONT_UI"]};font-size:14px;font-weight:700;color:{t["INK"]};">{p.get("decision_needed") or "No"}</p>'
-        + f'</td>'
-        + f'</tr></table>'
-        + f'</div>'
-    )
-    signal_rows += status_row
-
-    # This Week: one-liner headline + risk/warning details only
-    delta = p.get("week_delta")
-    if delta or done_bullets:
-        signal_rows += (
-            f'<div style="border-top:1px solid #d4d4d4;padding-top:12px;margin-top:12px;">'
-            + _eyebrow("This Week", t)
-        )
-        if delta:
-            signal_rows += (
-                f'<p style="margin:0 0 8px;font-family:{t["FONT_UI"]};font-size:14px;'
-                f'color:{t["INK"]};font-weight:600;line-height:1.6;">{delta}</p>'
+    # ── Why At Risk (specific, evidence-based reasons) ─────────────────────────
+    reasons = blockers + [s for s in health_signals if s not in blockers]
+    why_html = ""
+    if status != "on_track" and reasons:
+        why_label = "Why Off Track" if status == "off_track" else "Why At Risk"
+        why_html = (
+            f'<div style="border-top:1px solid #f0f0f0;padding-top:12px;margin-top:14px;">'
+            + _eyebrow(why_label, t, color=t["RED"])
+            + "".join(
+                f'<p style="margin:0 0 5px;font-family:{t["FONT_UI"]};font-size:13px;'
+                f'color:{t["TEXT"]};line-height:1.5;"><span style="color:{t["RED"]};margin-right:7px;">•</span>{r}</p>'
+                for r in reasons[:3]
             )
-        # Detail bullets — only risk signals, never repeat counts the one-liner covers
-        if done_bullets:
-            for item in done_bullets:
-                signal_rows += (
-                    f'<p style="margin:0 0 4px;font-family:{t["FONT_UI"]};font-size:13px;'
-                    f'color:{t["MUTED"]};line-height:1.5;">— {item}</p>'
-                )
-        signal_rows += f'</div>'
-    elif not delta and not done_bullets:
-        # Nothing to show — skip section entirely
-        pass
-
-    if health_signals:
-        signal_rows += (
-            f'<div style="border-top:1px solid #d4d4d4;padding-top:12px;margin-top:12px;">'
-            + _eyebrow("Risks & Signals", t, color=t["RED"])
-            + "".join(f'<p style="margin:0 0 4px;font-family:{t["FONT_UI"]};font-size:13px;color:{t["TEXT"]};line-height:1.5;">— {b}</p>' for b in health_signals[:3])
             + f'</div>'
         )
 
-    if blockers:
-        signal_rows += (
-            f'<div style="border-top:1px solid #d4d4d4;padding-top:12px;margin-top:12px;">'
-            + _eyebrow("Blockers", t, color=t["RED"])
-            + "".join(f'<p style="margin:0 0 4px;font-family:{t["FONT_UI"]};font-size:13px;color:{t["TEXT"]};line-height:1.5;">— {b}</p>' for b in blockers[:2])
+    # ── This Week (delivered progress, max 4) ─────────────────────────────────
+    this_week_html = ""
+    if done_bullets:
+        this_week_html = (
+            f'<div style="border-top:1px solid #f0f0f0;padding-top:12px;margin-top:14px;">'
+            + _eyebrow("This Week", t)
+            + "".join(
+                f'<p style="margin:0 0 4px;font-family:{t["FONT_UI"]};font-size:13px;'
+                f'color:{t["TEXT"]};line-height:1.5;"><span style="margin-right:6px;">—</span>{item}</p>'
+                for item in done_bullets[:4]
+            )
             + f'</div>'
         )
 
-    # Meeting signal from Granola
-    meeting = p.get("meeting_signal")
-    if meeting:
-        signal_rows += (
-            f'<div style="border-top:1px solid #d4d4d4;padding-top:12px;margin-top:12px;'
-            f'background:{t["CARD_WARM"]};border-radius:6px;padding:12px;">'
-            + _eyebrow("From Meetings", t)
-            + f'<p style="margin:0;font-family:{t["FONT_UI"]};font-size:13px;color:{t["TEXT"]};font-style:italic;line-height:1.5;">{meeting}</p>'
-            + f'</div>'
-        )
-
-    # Next Week: one-liner headline + complementary details
+    # ── Next Week (committed/planned, max 3) ───────────────────────────────────
+    next_html = ""
     next_week_text = p.get("next_week")
     if next_week_text or next_bullets:
-        signal_rows += (
-            f'<div style="border-top:1px solid #d4d4d4;padding-top:12px;margin-top:12px;">'
+        next_html = (
+            f'<div style="border-top:1px solid #f0f0f0;padding-top:12px;margin-top:14px;">'
             + _eyebrow("Next Week", t)
         )
         if next_week_text:
-            signal_rows += (
-                f'<p style="margin:0 0 10px;font-family:{t["FONT_UI"]};font-size:14px;'
-                f'color:{t["INK"]};font-weight:600;line-height:1.6;">{next_week_text}</p>'
+            next_html += (
+                f'<p style="margin:0 0 8px;font-family:{t["FONT_UI"]};font-size:15px;'
+                f'color:{t["INK"]};font-weight:700;line-height:1.5;">{next_week_text}</p>'
             )
-        # Show only bullets that add detail beyond the one-liner
         extra_next = [
             b for b in next_bullets
             if not next_week_text or b.lower() not in next_week_text.lower()
         ]
-        for item in extra_next[:4]:
-            signal_rows += (
+        for item in extra_next[:3]:
+            next_html += (
                 f'<p style="margin:0 0 4px;font-family:{t["FONT_UI"]};font-size:13px;'
-                f'color:{t["MUTED"]};line-height:1.5;">— {item}</p>'
+                f'color:{t["MUTED"]};line-height:1.5;"><span style="margin-right:6px;">—</span>{item}</p>'
             )
-        if not next_week_text and not extra_next:
-            for item in next_bullets[:4]:
-                signal_rows += (
-                    f'<p style="margin:0 0 4px;font-family:{t["FONT_UI"]};font-size:13px;'
-                    f'color:{t["TEXT"]};line-height:1.5;">— {item}</p>'
-                )
-        signal_rows += f'</div>'
+        next_html += f'</div>'
 
-    card_inner = header_html + timeline_html + plan_section + signal_rows
+    card_inner = header_html + progress_html + why_html + this_week_html + next_html
     return (
         f'<tr><td style="padding-bottom:12px;">'
         + _card(card_inner, t, padding="20px 24px", border=card_border)
@@ -1125,11 +1200,30 @@ def _html_score_methodology(text: str, t: dict) -> str:
     )
 
 
-def _html_footer(sources: list[str], errors: list[str], t: dict) -> str:
-    errors_html = (
-        f' &nbsp;·&nbsp; <span style="color:{t["ORANGE"]};">partial data</span>'
-        if errors else ""
+def _html_data_quality(notes: list[str], t: dict) -> str:
+    """Subtle caption flagging tracking-hygiene gaps that limit report precision."""
+    if not notes:
+        return ""
+    items = "".join(
+        f'<p style="margin:0 0 5px;font-family:{t["FONT_UI"]};font-size:11px;'
+        f'color:{t["MUTED"]};line-height:1.5;">'
+        f'<span style="color:{t["GHOST"]};margin-right:6px;">ⓘ</span>{n}</p>'
+        for n in notes[:3]
     )
+    inner = (
+        _eyebrow("Data Quality", t)
+        + items
+        + f'<p style="margin:6px 0 0;font-family:{t["FONT_UI"]};font-size:10px;color:{t["GHOST"]};'
+        f'line-height:1.5;">These are tracking gaps, not delivery risks — addressing them improves report precision.</p>'
+    )
+    return (
+        f'<tr><td style="padding-top:16px;">'
+        + _card_warm(inner, t)
+        + f'</td></tr>\n'
+    )
+
+
+def _html_footer(sources: list[str], errors: list[str], t: dict) -> str:
     return (
         f'<tr><td style="padding-top:40px;border-top:{t["BORDER"]};">'
         f'<table width="100%" cellpadding="0" cellspacing="0" border="0"><tr>'
@@ -1137,8 +1231,6 @@ def _html_footer(sources: list[str], errors: list[str], t: dict) -> str:
         f'<strong style="color:{t["MUTED"]};">{t["COMPANY"]}</strong>'
         f' &nbsp;·&nbsp; {t["LOCATION"]}'
         f' &nbsp;·&nbsp; {t["TAGLINE"]}</p></td>'
-        f'<td align="right"><p style="margin:0;font-family:{t["FONT_UI"]};font-size:10px;color:{t["GHOST"]};">'
-        f'Signals: {", ".join(sources) or "none"}{errors_html}</p></td>'
         f'</tr></table></td></tr>\n'
     )
 
@@ -1155,70 +1247,42 @@ def render_html(report: SteeringReport) -> str:
     except Exception:
         week_label = f"Week of {report.week_end}"
 
-    try:
-        from config import get as cfg_get
-        recipients = cfg_get("steering.recipients", []) or []
-        raw = recipients[0] if recipients else ""
-        recipient = raw.split("<")[0].strip() if "<" in raw else ("Recipient" if "@" in raw else raw or "Recipient")
-    except Exception:
-        recipient = "Recipient"
-
     from tools.steering_schema import report_to_dict
     d = report_to_dict(report)
     projects = d.get("projects", [])
     sp = d.get("sprint_signals") or {}
     sp_trend = sp.get("velocity_trend", "stable")
-
     rows = ""
-    rows += _html_header(report, recipient, week_label, t)
+    rows += _html_header(report, week_label, t)
 
     rows += _html_bottom_line(report.portfolio_summary.top_risk or "No summary.", t)
+    rows += _html_portfolio_health_narrative(report, projects, t)
     rows += _html_exec_snapshot(report, projects, t)
 
-    # Inactive projects (collapsed — reduce noise)
-    ig = d.get("inactive_group")
-    if ig:
-        rows += _html_inactive_group(ig, t)
-
-    rows += _html_portfolio_table(projects, t)
-    rows += _html_week_summaries(d.get("this_week_summary", []), d.get("next_week_summary", []), t)
-    if report.client_summary:
-        rows += _html_client_summary(report.client_summary, t)
     rows += _html_decisions(d.get("decisions_needed", []), t)
+    rows += _html_portfolio_table(projects, t)
     rows += _html_sprint_pulse(sp, t)
     rows += _html_milestone_radar(projects, report.week_start, t)
 
-    detail_projects = [p for p in projects if _project_needs_detail(p)]
-    on_track_projects = [p for p in projects if not _project_needs_detail(p)]
-
-    if detail_projects:
+    if projects:
         rows += (
             f'<tr><td style="padding-top:24px;">'
             + _eyebrow("Project Detail", t)
             + f'</td></tr>\n'
         )
-        for p in detail_projects:
+        for p in projects:
             rows += _html_project_card(p, sp_trend, t)
 
-    if on_track_projects:
-        rows += (
-            f'<tr><td style="padding-top:20px;">'
-            + _eyebrow("On Track", t, color=t["GREEN"])
-            + f'</td></tr>\n'
-        )
-        for p in on_track_projects:
-            rows += _html_project_card_compact(p, t)
-
-    # Portfolio risks (cross-cutting patterns)
-    rows += _html_portfolio_risks(d.get("portfolio_summary", {}).get("portfolio_risks", []), t)
-
-    # Leadership priorities
-    rows += _html_leadership_priorities(d.get("portfolio_summary", {}).get("leadership_priorities", []), t)
+    # Leadership Priorities block intentionally removed — it duplicated the Bottom
+    # Line with generic "Review X" wording.
 
     rows += _html_cross_project(d.get("cross_project_risks", []), t)
 
     ooo = (d.get("capacity_signals") or {}).get("ooo_this_week", [])
     rows += _html_capacity(ooo, t)
+
+    # Data-quality / tracking-hygiene notes (subtle, actionable)
+    rows += _html_data_quality(d.get("data_quality_notes", []), t)
 
     # Score methodology (small text at bottom)
     methodology = report.score_methodology
@@ -1250,12 +1314,23 @@ def render_html(report: SteeringReport) -> str:
 def render_markdown(report: SteeringReport) -> str:
     """Render the steering report as plain Markdown for CLI/Telegram output."""
     lines: list[str] = []
+    t = _brand()
     s = report.portfolio_summary
 
     lines.append(f"# Steering Report — {report.week_end}")
     lines.append(f"*{report.week_start} → {report.week_end} · generated {report.generated_at[:16].replace('T', ' ')}*")
     lines.append("")
     lines.append(f"> **{s.top_risk}**")
+    lines.append("")
+
+    inactive = getattr(s, "inactive", 0)
+    attention = s.at_risk + getattr(s, "off_track", 0)
+    lines.append("## Portfolio Health")
+    lines.append("")
+    lines.append(f"- On Track: {s.on_track}")
+    lines.append(f"- Need Attention: {attention}")
+    lines.append(f"- Decisions Needed: {s.decisions_needed}")
+    lines.append(f"- Inactive: {inactive}")
     lines.append("")
 
     lines.append(f"## Portfolio ({s.total_projects} projects)")
@@ -1388,6 +1463,12 @@ def render_markdown(report: SteeringReport) -> str:
         })
         lines.append(f"### {p.name} — {p.owner}")
         lines.append("")
+        if p.objective:
+            lines.append(f"**Objective:** {p.objective}")
+            lines.append("")
+        if p.goal_progress:
+            lines.append(f"**Toward goal:** {p.goal_progress}")
+            lines.append("")
         lines.append(
             f"**Timeline:** {int(p.work_progress_pct)}% done / {int(p.time_progress_pct)}% elapsed"
             + (f" · **{p.days_left}d left**" if p.days_left is not None else "")
@@ -1415,7 +1496,9 @@ def render_markdown(report: SteeringReport) -> str:
             lines.append(f"**Milestones:** {len(past)}/{len(sorted_ms)} passed")
             for m in sorted_ms[:6]:
                 status = "✓" if m.get("target_date", "") < today_str else "·"
-                lines.append(f"  {status} {m.get('target_date','—')} — {m.get('name','')}")
+                pct = m.get("progress_pct")
+                pct_str = f" ({int(pct)}%)" if pct is not None else ""
+                lines.append(f"  {status} {m.get('target_date','—')} — {m.get('name','')}{pct_str}")
         else:
             lines.append("**Milestones:** none in Linear")
         lines.append("")
@@ -1471,6 +1554,9 @@ def render_markdown(report: SteeringReport) -> str:
             lines.append(f"### {p.name}")
             lines.append(f"*On Track · {int(p.work_progress_pct)}% done · score {score_str}{target_str}*")
             lines.append("")
+            if p.goal_progress:
+                lines.append(f"**Toward goal:** {p.goal_progress}")
+                lines.append("")
             if done_b:
                 lines.append("**Delivered:**")
                 for b in done_b[:4]:
@@ -1494,6 +1580,15 @@ def render_markdown(report: SteeringReport) -> str:
         lines.append("## Team Capacity")
         lines.append("")
         lines.append(f"OOO: {', '.join(report.capacity_signals.ooo_this_week)}")
+        lines.append("")
+
+    if report.data_quality_notes:
+        lines.append("## Data Quality")
+        lines.append("")
+        for n in report.data_quality_notes[:3]:
+            lines.append(f"- ⓘ {n}")
+        lines.append("")
+        lines.append("_These are tracking gaps, not delivery risks — addressing them improves report precision._")
         lines.append("")
 
     lines.append("---")

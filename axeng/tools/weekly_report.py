@@ -5,7 +5,9 @@ Generates comprehensive weekly summary using all available data sources.
 """
 
 import json
+import os
 import sys
+import urllib.request
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -17,6 +19,27 @@ from tools.github_activity import github_activity
 from tools.sprint_health import sprint_health, sprint_velocity
 from tools.dora_metrics import dora_metrics
 from tools.vacations import who_is_ooo_today
+
+
+def _load_local_env() -> None:
+    """Load simple KEY=VALUE pairs from local .env files into os.environ."""
+    env_paths = [
+        Path.cwd() / ".env",
+        Path(__file__).resolve().parents[2] / ".env",
+        Path(os.getenv("AXENG_HOME", "~/.axeng")).expanduser() / ".env",
+    ]
+    for path in env_paths:
+        if not path.exists():
+            continue
+        try:
+            for raw_line in path.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+        except Exception:
+            continue
 
 
 def generate_weekly_report(send: bool = False) -> dict:
@@ -298,31 +321,63 @@ def _generate_insights(data: dict) -> list:
 def _send_report(report_text: str, data: dict) -> bool:
     """Send report via configured channel (Telegram, Email, etc.)."""
     try:
-        import os
-        from pathlib import Path
+        import subprocess
+
+        _load_local_env()
+        delivered = False
+        report_body = report_text[:4000]
 
         # Try Telegram first
         telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
         telegram_chat = os.getenv("TELEGRAM_CHAT_ID")
 
         if telegram_token and telegram_chat:
-            import subprocess
+            try:
+                result = subprocess.run(
+                    [
+                        "curl", "-s", "-X", "POST",
+                        f"https://api.telegram.org/bot{telegram_token}/sendMessage",
+                        "-d", f"chat_id={telegram_chat}",
+                        "-d", f"text={report_body}",  # Telegram limit
+                        "-d", "parse_mode=HTML"
+                    ],
+                    capture_output=True,
+                    text=True
+                )
 
-            # Send via Telegram
-            result = subprocess.run(
-                [
-                    "curl", "-s", "-X", "POST",
-                    f"https://api.telegram.org/bot{telegram_token}/sendMessage",
-                    "-d", f"chat_id={telegram_chat}",
-                    "-d", f"text={report_text[:4000]}",  # Telegram limit
-                    "-d", "parse_mode=HTML"
-                ],
-                capture_output=True,
-                text=True
-            )
+                if result.returncode == 0:
+                    print("💬 Sent via Telegram", file=sys.stderr)
+                    delivered = True
+                else:
+                    print(f"⚠️  Telegram delivery failed: {result.stderr or result.stdout}", file=sys.stderr)
+            except Exception as exc:
+                print(f"⚠️  Telegram delivery failed: {exc}", file=sys.stderr)
 
-            if result.returncode == 0:
-                return True
+        slack_webhook = (
+            os.getenv("SLACK_WEBHOOK_URL")
+            or get("reporting.webhook_url")
+            or get("steering.webhook_url")
+        )
+        if slack_webhook:
+            try:
+                payload = json.dumps({"text": report_body}).encode("utf-8")
+                req = urllib.request.Request(
+                    slack_webhook,
+                    data=payload,
+                    headers={"Content-Type": "application/json"},
+                    method="POST",
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    if 200 <= getattr(resp, "status", 200) < 300:
+                        print("💬 Sent via Slack", file=sys.stderr)
+                        delivered = True
+                    else:
+                        print(f"⚠️  Slack delivery failed with status {getattr(resp, 'status', 'unknown')}", file=sys.stderr)
+            except Exception as exc:
+                print(f"⚠️  Slack delivery failed: {exc}", file=sys.stderr)
+
+        if delivered:
+            return True
 
         # TODO: Add email sending via gmail_script
         # For now, just save to file

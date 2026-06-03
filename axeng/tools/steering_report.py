@@ -39,8 +39,9 @@ Scoring model (weights)
     Staleness penalty                       …  5%
 
     Team velocity trend is applied as a modifier after weighting:
-      declining → −8pts, improving → +5pts
-    Urgent transcript tone → caps score at ≤59 and status at at_risk
+      declining → −5pts, improving → +3pts
+    Hard guards: any overdue issue (work < 95%) → status off_track and score ≤44;
+      ≥2 transcript blockers → score ≤54; near-done projects floored at 78.
 
 Signal sources
 ──────────────
@@ -62,6 +63,7 @@ Entry point:  generate_steering_report(week_ending: date | None) -> SteeringRepo
 from __future__ import annotations
 
 import json
+import os
 import sys
 from datetime import date, datetime, timedelta
 from pathlib import Path
@@ -107,6 +109,27 @@ STEERING_RULES_PATH = Path(__file__).resolve().parents[2] / "prompts" / "steerin
 
 
 # ── Week boundaries ──────────────────────────────────────────────────────────
+
+def _load_local_env() -> None:
+    """Load simple KEY=VALUE pairs from local .env files into os.environ."""
+    env_paths = [
+        Path.cwd() / ".env",
+        Path(os.getenv("AXENG_HOME", "~/.axeng")).expanduser() / ".env",
+    ]
+    for path in env_paths:
+        if not path.exists():
+            continue
+        try:
+            for raw_line in path.read_text(encoding="utf-8").splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith("#") or "=" not in line:
+                    continue
+                key, value = line.split("=", 1)
+                key = key.strip()
+                value = value.strip().strip('"').strip("'")
+                os.environ.setdefault(key, value)
+        except Exception:
+            continue
 
 def _week_boundaries(week_ending: date | None = None) -> tuple[date, date]:
     """Return (week_start Monday, week_end Friday) for the report period."""
@@ -227,6 +250,7 @@ def _score_project(
     blocked_count = len(transcript_blockers)
     timeline_gap = work_pct - time_pct
     commit_count = commit_signals.commits_this_week if commit_signals else 0
+    overdue_target = days_left is not None and days_left < 0 and work_pct < 95
     recent_start = False
     if start_date:
         try:
@@ -288,6 +312,8 @@ def _score_project(
     )
 
     # Hard guards for clear delivery risk.
+    if overdue_target:
+        health_score = min(health_score, 44)
     if issues.overdue_count > 0 and work_pct < 95:
         health_score = min(health_score, 44)
     if blocked_count >= 2:
@@ -307,7 +333,9 @@ def _score_project(
 
     health_score = round(min(max(health_score, 0), 100), 1)
 
-    if issues.overdue_count > 0 and work_pct < 95:
+    if overdue_target:
+        status = "off_track"
+    elif issues.overdue_count > 0 and work_pct < 95:
         status = "off_track"
     elif blocked_count > 0:
         status = "at_risk"
@@ -320,7 +348,9 @@ def _score_project(
     else:
         status = "off_track"
 
-    if health_score >= 75 and not transcript_blockers:
+    if overdue_target or status == "off_track":
+        confidence = "low"
+    elif health_score >= 75 and not transcript_blockers:
         confidence: Confidence = "high"
     elif health_score >= 45:
         confidence = "medium"
@@ -331,8 +361,10 @@ def _score_project(
         forecast: Forecast = "delivering_as_planned"
     elif transcript_blockers:
         forecast = "blocked_needs_escalation"
-    elif issues.overdue_count > 0:
-        forecast = "target_date_at_risk"
+    elif issues.unowned_count >= 3 and linear.completion_rate < 60:
+        # Material unowned backlog on an under-delivering project: the actionable
+        # lever is assigning owners, not (yet) escalating a date slip.
+        forecast = "unowned_assign_now"
     else:
         forecast = "target_date_at_risk"
 
@@ -343,19 +375,22 @@ def _score_project(
 
 def _build_week_delta(card: ProjectCard) -> str | None:
     """
-    Synthesise a clear one-sentence week summary that separates code activity
-    (GitHub commits) from issue tracker activity (Linear/GitHub Issues).
-    Uses '·' to join distinct signal groups.
+    Synthesise a one-sentence executive summary of what changed this week,
+    framed against the current milestone instead of repeating delivery bullets.
     """
     bullets = _build_delivered_bullets(card)
+    milestone = _current_milestone(card)
+    milestone_name = (milestone or {}).get("name")
+    if bullets and milestone_name:
+        return f"Advanced {milestone_name} through this week's delivered work."
     if bullets:
-        return bullets[0]
+        return f"Delivered meaningful progress against the current project scope this week."
 
     lin = card.linear_signals
     if lin.completed > 0:
-        return f"Completed {lin.completed} issue{'s' if lin.completed != 1 else ''} this week."
+        return f"Completed implementation work that moved the project forward this week."
     if lin.in_progress > 0:
-        return f"Continued delivery on {lin.in_progress} in-progress issue{'s' if lin.in_progress != 1 else ''}."
+        return f"Continued delivery on active milestone work this week."
     return None
 
 
@@ -383,6 +418,43 @@ def _clean_work_label(text: str) -> str:
     return text.rstrip(".")
 
 
+def _group_related_outcomes(items: list[str]) -> list[str]:
+    """Collapse raw artifact-like lists into outcome-oriented grouped statements."""
+    grouped: dict[str, list[str]] = {}
+    passthrough: list[str] = []
+    for raw in items:
+        text = _clean_work_label(raw)
+        if not text:
+            continue
+        if ":" in text:
+            prefix, suffix = [part.strip() for part in text.split(":", 1)]
+            if prefix and suffix and len(suffix.split()) <= 5:
+                grouped.setdefault(prefix, []).append(suffix)
+                continue
+        passthrough.append(text)
+
+    merged: list[str] = []
+    for prefix, suffixes in grouped.items():
+        if len(suffixes) >= 2:
+            merged.append(
+                f"Expanded {prefix} coverage across {', '.join(suffixes[:-1])}, and {suffixes[-1]}"
+            )
+        else:
+            merged.append(f"{prefix}: {suffixes[0]}")
+    merged.extend(passthrough)
+    return merged
+
+
+def _milestone_delivery_fallback(card: ProjectCard, delivered_count: int) -> str:
+    milestone = _current_milestone(card)
+    milestone_name = (milestone or {}).get("name")
+    milestone_label = milestone_name or "the current target date"
+    return (
+        f"Advanced work required for {milestone_name} through "
+        f"{delivered_count} completed delivery item{'s' if delivered_count != 1 else ''} this week."
+    )
+
+
 def _summarise_commit_messages(messages: list[str]) -> list[str]:
     items: list[str] = []
     seen: set[str] = set()
@@ -396,7 +468,7 @@ def _summarise_commit_messages(messages: list[str]) -> list[str]:
             continue
         seen.add(lowered)
         items.append(cleaned)
-    return items[:15]
+    return _group_related_outcomes(items[:15])[:8]
 
 
 def _summarise_pr_titles(titles: list[str]) -> list[str]:
@@ -409,7 +481,7 @@ def _summarise_pr_titles(titles: list[str]) -> list[str]:
             continue
         seen.add(lowered)
         items.append(cleaned)
-    return items[:4]
+    return _group_related_outcomes(items[:8])[:5]
 
 
 def _raw_commit_descriptors(card: ProjectCard) -> list[str]:
@@ -439,7 +511,7 @@ def _summarise_issue_labels(labels: list[str]) -> list[str]:
             continue
         seen.add(lowered)
         items.append(cleaned)
-    return items[:5]
+    return _group_related_outcomes(items[:10])[:6]
 
 
 def _summarise_linear_completed(titles: list[str]) -> list[str]:
@@ -455,7 +527,7 @@ def _summarise_linear_completed(titles: list[str]) -> list[str]:
             continue
         seen.add(lowered)
         items.append(cleaned)
-    return items[:6]
+    return _group_related_outcomes(items[:12])[:6]
 
 
 def _summarise_transcript_delivery(card: ProjectCard) -> list[str]:
@@ -591,20 +663,21 @@ def _build_delivered_bullets(card: ProjectCard) -> list[str]:
         if commit_summary:
             _add(commit_summary)
 
-    # Evidence footer — counts only, appended after real outcomes
-    evidence_parts: list[str] = []
-    if lin.completed > 0 and not lin.recently_completed_titles:
-        evidence_parts.append(f"{lin.completed} Linear issue{'s' if lin.completed != 1 else ''} marked done")
-    if gh.closed_this_week > 0 and not gh.recently_closed:
-        evidence_parts.append(f"{gh.closed_this_week} GitHub issue{'s' if gh.closed_this_week != 1 else ''} closed")
-    if cs.commits_this_week > 0 and not cs.recent_pr_titles and not cs.recent_messages:
-        repo_count = len(cs.active_repos)
-        evidence_parts.append(
-            f"{cs.commits_this_week} commit{'s' if cs.commits_this_week != 1 else ''} merged"
-            + (f" across {repo_count} repo{'s' if repo_count != 1 else ''}" if repo_count else "")
-        )
-    if evidence_parts and len(bullets) < 6:
-        bullets.append("Evidence: " + "; ".join(evidence_parts) + ".")
+    # Final fallback: if we only have activity counts, translate them into delivery
+    # progress language instead of surfacing raw tracker telemetry as the headline.
+    if not bullets:
+        current_ms = _current_milestone(card)
+        milestone_name = (current_ms or {}).get("name")
+        if lin.completed > 0:
+            bullets.append(_milestone_delivery_fallback(card, lin.completed))
+        elif gh.closed_this_week > 0:
+            bullets.append(
+                _milestone_delivery_fallback(card, gh.closed_this_week)
+            )
+        elif cs.commits_this_week > 0:
+            bullets.append(
+                f"Made implementation progress that supported {milestone_name or 'the current milestone'} this week."
+            )
 
     if not bullets and lin.in_progress > 0:
         bullets.append(f"Continued active work on {lin.in_progress} in-progress issue{'s' if lin.in_progress != 1 else ''}.")
@@ -680,6 +753,64 @@ def _current_milestone(card: ProjectCard) -> dict | None:
     return sorted_ms[-1] if sorted_ms else None
 
 
+def _build_goal_progress(card: ProjectCard) -> str | None:
+    """
+    Synthesise a one-line "progress toward the goal" statement that frames the
+    week against the project's objective and the milestone it's converging on —
+    not a list of commits. Answers: are we getting closer to done, and how close?
+
+    Shape examples:
+      "On track toward 'GA launch' — 4/6 milestones done, 72% of scope complete, 21d to target."
+      "Behind on 'Billing v2' — milestone 'Invoicing' 30% done with 9d left; work trailing schedule by 18%."
+    """
+    work = int(round(card.work_progress_pct))
+    ms = _current_milestone(card)
+    card.current_milestone = ms
+
+    parts: list[str] = []
+
+    # 1. Lead with the milestone being worked toward (the nearest concrete goal).
+    if ms:
+        from datetime import date as _d
+        name = ms.get("name", "milestone")
+        td = ms.get("target_date")
+        ms_pct = ms.get("progress_pct")
+        overdue = td and td < _d.today().isoformat()
+        lead = f"Working toward '{name}'"
+        detail = []
+        if ms_pct is not None:
+            detail.append(f"{int(ms_pct)}% of its scope done")
+        if td:
+            if overdue:
+                detail.append(f"target {td} passed")
+            elif card.days_left is not None:
+                detail.append(f"due {td}")
+        parts.append(lead + (f" — {', '.join(detail)}" if detail else ""))
+
+    # 2. Overall convergence: completed scope vs target date.
+    milestones = card.milestones or []
+    if milestones:
+        from datetime import date as _d
+        done_ms = sum(1 for m in milestones if (m.get("target_date") or "") < _d.today().isoformat())
+        parts.append(f"{done_ms}/{len(milestones)} milestones passed, {work}% of project scope complete")
+    else:
+        parts.append(f"{work}% of project scope complete")
+
+    # 3. Are we converging or diverging? (work vs time, honest about drift.)
+    gap = card.work_progress_pct - card.time_progress_pct
+    if card.days_left is not None and card.days_left < 0:
+        parts.append(f"target date passed {abs(card.days_left)}d ago")
+    elif gap <= -15:
+        parts.append(f"trailing schedule by {int(abs(gap))}%")
+    elif gap >= 10 and work < 100:
+        parts.append("ahead of schedule")
+
+    if not parts:
+        return None
+    sentence = "; ".join(parts)
+    return sentence[0].upper() + sentence[1:] + "."
+
+
 def _build_status_explanation(card: ProjectCard) -> list[str]:
     """
     Build a list of specific, evidence-based reasons why a project is at risk
@@ -691,43 +822,45 @@ def _build_status_explanation(card: ProjectCard) -> list[str]:
     time = card.time_progress_pct
     gap = work - time  # negative = behind schedule
 
+    milestone = _current_milestone(card)
+    milestone_name = (milestone or {}).get("name")
+    milestone_label = milestone_name or "the current target date"
+
     # Timeline position
     if card.days_left is not None and card.days_left < 0:
-        reasons.append(f"Target date passed {abs(card.days_left)}d ago — {int(work)}% complete")
+        if milestone_name:
+            reasons.append(
+                f"{milestone_name} is past its target date by {abs(card.days_left)}d with only {int(work)}% complete"
+            )
+        else:
+            reasons.append(
+                f"The current target date passed {abs(card.days_left)}d ago with only {int(work)}% complete"
+            )
     elif gap < -20:
-        reasons.append(
-            f"{int(time)}% of time elapsed but only {int(work)}% done "
-            f"— {int(abs(gap))}% behind schedule"
-        )
+        reasons.append(f"Delivery is materially behind plan for {milestone_label}")
     elif gap < -10:
-        reasons.append(f"Slightly behind: {int(work)}% done vs {int(time)}% time elapsed")
+        reasons.append(f"Progress is slipping against the current target date")
 
     # Velocity vs needed
     if card.days_left and card.days_left > 0 and lin.velocity > 0:
         remaining_issues = lin.todo + lin.in_progress
         needed_velocity = remaining_issues / card.days_left if card.days_left > 0 else 0
         if needed_velocity > lin.velocity * 1.5:
-            reasons.append(
-                f"Needs {needed_velocity:.2f} issues/day to finish on time "
-                f"but current velocity is {lin.velocity:.2f}/day"
-            )
+            reasons.append(f"Current delivery pace is unlikely to hit the target date")
     elif lin.velocity == 0 and (lin.todo + lin.in_progress) > 0:
-        reasons.append(f"No velocity — {lin.todo + lin.in_progress} issues unstarted or stalled")
+        reasons.append(f"No measurable delivery progress this week against {milestone_label}")
 
     # Staleness
     if lin.staleness_rate > 60:
-        reasons.append(
-            f"{int(lin.staleness_rate)}% of open issues not updated in 7+ days"
-            + (f": {lin.top_stale_issues[0]}" if lin.top_stale_issues else "")
-        )
+        reasons.append(f"Key milestone work has not moved recently, increasing schedule risk")
 
     # Current milestone context
-    ms = _current_milestone(card)
+    ms = milestone
     if ms:
         from datetime import date as _d
         today = _d.today().isoformat()
         if ms["target_date"] < today:
-            reasons.append(f"Milestone overdue: '{ms['name']}' was due {ms['target_date']}")
+            reasons.append(f"Current milestone '{ms['name']}' is overdue")
 
     return reasons
 
@@ -775,38 +908,66 @@ def _detect_decision(card: ProjectCard) -> str | None:
 # ── Bottom line synthesis ────────────────────────────────────────────────────
 
 def _build_bottom_line(projects: list[ProjectCard], decisions: list[dict]) -> str:
-    ranked = sorted(
-        projects,
-        key=lambda p: (
-            0 if p.status == "off_track" else 1 if p.status == "at_risk" else 2,
-            p.days_left if p.days_left is not None else 9999,
-            p.health_score,
-        ),
+    at_risk = [p for p in projects if p.status in {"at_risk", "off_track"}]
+    no_velocity = [
+        p for p in at_risk
+        if p.linear_signals.velocity == 0 and (p.linear_signals.todo + p.linear_signals.in_progress) > 0
+    ]
+    nearest_risk = min(
+        at_risk,
+        key=lambda p: (p.days_left if p.days_left is not None else 9999, p.health_score),
+        default=None,
     )
-    risk_lines: list[str] = []
-    for p in ranked:
-        if p.status == "on_track" and len(risk_lines) >= 1:
-            continue
-        if p.days_left is not None and p.days_left < 0:
-            risk_lines.append(f"{p.name} missed target date by {abs(p.days_left)}d.")
-        elif p.issue_signals.unowned_count > 0 and p.linear_signals.completion_rate < 80:
-            risk_lines.append(f"{p.name} has {p.issue_signals.unowned_count} unowned issues.")
-        elif p.blockers:
-            risk_lines.append(f"{p.name} is blocked: {p.blockers[0]}.")
-        elif p.status != "on_track":
-            risk_lines.append(f"{p.name} is {p.status.replace('_', ' ')} with {int(p.work_progress_pct)}% complete.")
-        if len(risk_lines) >= 3:
-            break
 
-    if not risk_lines:
-        return f"Portfolio steady: {sum(1 for p in projects if p.status == 'on_track')} projects on track, no immediate escalation required."
+    if not at_risk:
+        on_track = sum(1 for p in projects if p.status == "on_track")
+        return f"Portfolio steady: {on_track} projects on track, with no immediate leadership intervention required."
 
-    return " Top risks: " + " ".join(f"{i + 1}. {line}" for i, line in enumerate(risk_lines))
+    parts: list[str] = []
+    if no_velocity:
+        names = ", ".join(p.name for p in no_velocity[:3])
+        parts.append(
+            f"{len(no_velocity)} strategic project{'s' if len(no_velocity) != 1 else ''} show no measurable delivery velocity ({names})"
+        )
+    else:
+        parts.append(
+            f"{len(at_risk)} project{'s' if len(at_risk) != 1 else ''} are at risk against current milestones"
+        )
+
+    if nearest_risk and nearest_risk.days_left is not None:
+        milestone = _current_milestone(nearest_risk)
+        milestone_name = (milestone or {}).get("name")
+        if nearest_risk.days_left < 0:
+            parts.append(
+                f"{nearest_risk.name} is the most immediate execution risk after missing"
+                + (f" '{milestone_name}'" if milestone_name else " its target")
+                + f" by {abs(nearest_risk.days_left)}d"
+            )
+        elif nearest_risk.days_left <= 21:
+            parts.append(
+                f"{nearest_risk.name} is the highest near-term execution risk"
+                + (f" because '{milestone_name}'" if milestone_name else "")
+                + f" is due in {nearest_risk.days_left}d"
+            )
+
+    if decisions:
+        parts.append(f"{len(decisions)} leadership decision{'s' if len(decisions) != 1 else ''} may be needed this week")
+
+    sentence = parts[0]
+    if len(parts) > 1:
+        sentence += ", placing near-term milestones at risk. " + parts[1]
+    if len(parts) > 2:
+        sentence += ". " + ". ".join(parts[2:])
+    return sentence if sentence.endswith(".") else sentence + "."
 
 
 # ── Portfolio-level weekly summaries ────────────────────────────────────────
 
-def _build_this_week_summary(cards: list[ProjectCard]) -> list[str]:
+def _build_this_week_summary(
+    cards: list[ProjectCard],
+    week_start: str | None = None,
+    week_end: str | None = None,
+) -> list[str]:
     """
     3-5 portfolio-level bullet points covering code activity, issue tracker
     activity, milestone progress, and risk signals. Each bullet is scoped to
@@ -829,12 +990,12 @@ def _build_this_week_summary(cards: list[ProjectCard]) -> list[str]:
             bullets.append(f"{c.name}: {commit_summary.rstrip('.')}.")
 
     from datetime import date as _d, timedelta
-    week_ago = (_d.today() - timedelta(days=7)).isoformat()
-    today = _d.today().isoformat()
+    win_end = week_end or _d.today().isoformat()
+    win_start = week_start or (_d.fromisoformat(win_end) - timedelta(days=7)).isoformat()
     ms_passed = []
     for c in cards:
         for m in c.milestones:
-            if week_ago <= m.get("target_date", "") <= today:
+            if win_start <= m.get("target_date", "") <= win_end:
                 ms_passed.append(f"{c.name}: {m['name']}")
     if ms_passed:
         bullets.append(f"Milestones reached: {', '.join(ms_passed[:3])}")
@@ -898,9 +1059,9 @@ def _build_client_summary(cards: list[ProjectCard], inactive_group: InactiveGrou
         elif c.status == "at_risk" and c.blockers:
             risk_lines.append(f"{c.name}: {c.blockers[0].rstrip('.')}")
         elif c.status == "at_risk":
-            transcript_risks = _summarise_transcript_risks(c)
-            if transcript_risks:
-                risk_lines.append(f"{c.name}: {transcript_risks[0].rstrip('.')}")
+            explanations = _build_status_explanation(c)
+            if explanations:
+                risk_lines.append(f"{c.name}: {explanations[0].rstrip('.')}")
     if risk_lines:
         sections.append("§Risks\n" + "\n".join(risk_lines[:3]))
 
@@ -954,13 +1115,22 @@ def _load_steering_system_prompt() -> str:
         "Be direct, evidence-driven, and decision-focused. No filler. No emojis. No markdown headers. "
         "All prose should be one or two tight sentences per field — suitable for a busy CEO skimming on mobile."
     )
+    narrative_rules = (
+        " Narrative quality rules: avoid redundancy; every fact should appear once. "
+        "Executive summary explains implications, project detail explains evidence. "
+        "Summarize outcomes, not artifacts: never emit raw issue titles, commit logs, PR titles, workflow names, "
+        "repository names, or ticket IDs unless they are leadership-relevant. Group related implementation work into "
+        "one outcome-oriented statement. Explain progress relative to milestones. Never claim both 'no measurable "
+        "delivery progress' and 'meaningful work completed' without reconciling the difference. Replace metrics with "
+        "business meaning. Counts are last-resort evidence only."
+    )
     try:
         rules = STEERING_RULES_PATH.read_text(encoding="utf-8").strip()
         if rules:
-            return base + "\n\n" + rules
+            return base + narrative_rules + "\n\n" + rules
     except Exception:
         pass
-    return base
+    return base + narrative_rules
 
 
 _STEERING_SYSTEM = _load_steering_system_prompt()
@@ -985,6 +1155,18 @@ def _llm_synthesize_narrative(
         snapshot.append({
             "name": c.name,
             "owner": c.owner,
+            # The goal this project exists to achieve — anchor every summary to it.
+            "objective": c.objective,
+            "goal_progress": c.goal_progress,
+            "current_milestone": (
+                {
+                    "name": c.current_milestone.get("name"),
+                    "target_date": c.current_milestone.get("target_date"),
+                    "progress_pct": c.current_milestone.get("progress_pct"),
+                    "description": c.current_milestone.get("description"),
+                }
+                if c.current_milestone else None
+            ),
             "status": c.status,
             "health_score": round(c.health_score),
             "days_left": c.days_left,
@@ -1025,7 +1207,11 @@ def _llm_synthesize_narrative(
                 for ts in c.transcript_signals[:3]
             ],
             "milestones": [
-                {"name": m["name"], "target_date": m.get("target_date")}
+                {
+                    "name": m["name"],
+                    "target_date": m.get("target_date"),
+                    "progress_pct": m.get("progress_pct"),
+                }
                 for m in c.milestones[:4]
             ],
             "decision_needed": c.decision_needed,
@@ -1053,16 +1239,25 @@ Respond with a JSON object with exactly these keys:
   "next_week_summary": ["<bullet 1>", "<bullet 2>", "<bullet 3>"],
   "per_project": {{
     "<project name>": {{
-      "week_delta": "<one sentence: what happened this week — commits, issues closed, backlog movement>",
-      "delivered_bullets": ["<2-5 bullets: what was actually delivered or concretely advanced this week>"],
+      "goal_progress": "<one sentence: where this project stands AGAINST ITS OBJECTIVE — how close to the goal / current milestone, and whether it is converging on the target date>",
+      "week_delta": "<one sentence: how this week moved the project toward its goal — not a raw commit/issue list>",
+      "delivered_bullets": ["<2-5 bullets: what was delivered this week, framed as progress toward the objective/milestone>"],
       "next_week": "<one sentence: what's committed or planned for next week>",
-      "planned_bullets": ["<1-4 bullets: what is planned next week>"],
+      "planned_bullets": ["<1-4 bullets: what is planned next week, ideally tied to the current milestone>"],
       "blockers": ["<specific blocker 1>", "<specific blocker 2>"]
     }}
   }}
 }}
 
 Rules:
+- THE REPORT IS ABOUT PROGRESS TOWARD GOALS, NOT ACTIVITY. For every project, anchor the
+  narrative to its `objective` and `current_milestone`. A reader should learn "how close is
+  this to its goal and is it converging", not "how many commits happened". Use commit/issue
+  data only as *evidence* of movement toward the goal.
+- per_project goal_progress: one sentence stating where the project stands relative to its
+  objective — distance to the current milestone (use progress_pct), and whether work is
+  converging on the target date. If no objective/milestone data exists, summarise from
+  work_pct vs time_pct and days_left instead. Never invent a goal that isn't in the data.
 - top_risk must name the single most urgent issue or decision. If all green, say so.
 - client_summary: structured plain-English summary using §Section headers. Sections: §Delivered (one line per project, up to 5 bullets each, format "ProjectName: what was done"), §Committed Next (explicit promises from meetings or planned_bullets, one line per project), §Risks (at-risk/blocked projects, one line each), §Inactive (projects with no activity, optional). Omit a section entirely if it has no content. No jargon, no internal IDs. Each project gets its own line — never join multiple projects into one sentence.
 - this_week_summary: 3-5 bullets, portfolio-level, specific numbers where available.
@@ -1145,6 +1340,8 @@ def _apply_llm_narrative(
         p = per_project.get(card.name)
         if not p:
             continue
+        if p.get("goal_progress"):
+            card.goal_progress = p["goal_progress"]
         if p.get("week_delta"):
             card.week_delta = p["week_delta"]
         if p.get("delivered_bullets"):
@@ -1257,6 +1454,43 @@ def _build_inactive_group(cards: list[ProjectCard]) -> InactiveGroup | None:
     return InactiveGroup(projects=names, count=count, summary=summary)
 
 
+# ── Data-quality notes ────────────────────────────────────────────────────────
+
+def _build_data_quality_notes(cards: list[ProjectCard]) -> list[str]:
+    """
+    Surface tracking-hygiene gaps that limit the report's precision so they're
+    actionable — chiefly milestones with no issues linked (so milestone-level
+    progress can't be computed and the report falls back to project-level %).
+    """
+    notes: list[str] = []
+
+    # Projects that have milestones but zero issues linked to ANY of them.
+    unlinked = [
+        c for c in cards
+        if c.milestones
+        and all((m.get("progress_pct") is None) for m in c.milestones)
+    ]
+    if unlinked:
+        names = ", ".join(c.name for c in unlinked[:5])
+        more = f" (+{len(unlinked) - 5} more)" if len(unlinked) > 5 else ""
+        notes.append(
+            f"{len(unlinked)} project{'s' if len(unlinked) != 1 else ''} have milestones with no issues linked "
+            f"in Linear — milestone-level progress falls back to overall project completion. "
+            f"Linking issues to milestones would sharpen these reports: {names}{more}."
+        )
+
+    # Projects with a target date but no milestones at all.
+    no_milestones = [c for c in cards if c.target_date and not c.milestones]
+    if no_milestones:
+        names = ", ".join(c.name for c in no_milestones[:5])
+        notes.append(
+            f"{len(no_milestones)} project{'s' if len(no_milestones) != 1 else ''} have a target date but no "
+            f"milestones defined — progress is tracked only as overall completion: {names}."
+        )
+
+    return notes
+
+
 # ── Portfolio risks ───────────────────────────────────────────────────────────
 
 def _build_portfolio_risks(
@@ -1357,15 +1591,31 @@ def _collect_capacity() -> CapacitySignals:
 
 # ── Main assembler ───────────────────────────────────────────────────────────
 
-def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
+def generate_steering_report(
+    week_ending: date | None = None,
+    only_project: str | None = None,
+) -> SteeringReport:
     """
     Assemble the full weekly steering report.
     Non-fatal errors per source are recorded in report.errors — never abort.
+
+    week_ending : report period anchor (snaps to that week's Friday). Historical
+                  regeneration uses it for ALL data sources, not just labels.
+    only_project: if set, restrict the report to the single matching project
+                  (case-insensitive name match).
     """
     week_start, week_end = _week_boundaries(week_ending)
     report_id = f"steering-{week_end.isoformat()}"
+    if only_project:
+        report_id += f"-{only_project.lower().replace(' ', '-')}"
     sources: list[str] = []
     errors: list[str] = []
+
+    # Data lookback window. For the current week this is ~7 days; for historical
+    # regeneration we extend back to week_start so Linear/commits/issues match the
+    # requested period instead of always reporting "today − 7".
+    today = date.today()
+    lookback_days = max(7, (today - week_start).days + 1)
 
     print("🏗  Building steering report...", file=sys.stderr)
 
@@ -1380,7 +1630,7 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
     print("  📋 Fetching Linear project health...", file=sys.stderr)
     linear_projects: list[dict] = []
     try:
-        health_result = linear_project_health(days=7)
+        health_result = linear_project_health(days=lookback_days)
         linear_projects = health_result.get("projects", [])
         sources.append("linear")
         if health_result.get("mode") == "teams":
@@ -1440,6 +1690,17 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
     # This keeps the steering report focused — no noise from test projects,
     # onboarding, or internal tooling that isn't part of the portfolio.
     configured_projects = list(linear_github_map.keys())
+    if only_project:
+        match = [n for n in configured_projects if n.lower() == only_project.lower()]
+        if not match:
+            # Substring fallback so "starfleet" matches "Starfleet Gateway"
+            match = [n for n in configured_projects if only_project.lower() in n.lower()]
+        if not match:
+            errors.append(
+                f"project filter: '{only_project}' not found among configured projects "
+                f"({', '.join(configured_projects[:8])})"
+            )
+        configured_projects = match
     missing_project_ids = [name for name in configured_projects if not configured_project_ids.get(name)]
     if missing_project_ids:
         errors.append(
@@ -1501,6 +1762,7 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
         card = ProjectCard(
             name=proj_name,
             owner=map_entry.get("owner", lin_data.get("lead", "Unassigned")),
+            objective=lin_data.get("objective"),
             linear_project_id=lin_data.get("id"),
             linear_state=lin_data.get("state"),
             repos=map_entry.get("repos", []),
@@ -1551,7 +1813,7 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
     # ── 6. Commit signals ───────────────────────────────────────────────────
     print("  📦 Fetching commit signals...", file=sys.stderr)
     try:
-        commits_data = github_commits_summary(days=7)
+        commits_data = github_commits_summary(days=lookback_days)
         by_repo = commits_data.get("by_repo", {})
         for card in project_cards:
             if not card.repos:
@@ -1627,6 +1889,7 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
 
     # Build synthesised week summary + next week forecast + status explanation
     for card in project_cards:
+        card.goal_progress = _build_goal_progress(card)
         card.week_delta = _build_week_delta(card)
         card.delivered_bullets = _build_delivered_bullets(card)
         card.next_week = _build_next_week(card)
@@ -1637,15 +1900,11 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
             if specific:
                 card.health_signals = specific + card.health_signals
         if card.issue_signals.stale_count > 0:
-            card.health_signals.append(
-                f"{card.issue_signals.stale_count} key issues stale for more than 7 days."
-            )
+            card.health_signals.append("Key milestone work has not moved recently.")
         if card.linear_signals.velocity == 0 and card.linear_signals.completed == 0:
-            card.health_signals.append("No issue transitions recorded this week.")
+            card.health_signals.append("No measurable delivery progress was recorded this week.")
         if card.issue_signals.unowned_count > 0:
-            card.health_signals.append(
-                f"{card.issue_signals.unowned_count} unassigned issue{'s' if card.issue_signals.unowned_count != 1 else ''} remain in backlog."
-            )
+            card.health_signals.append("Some remaining scope has no clear owner.")
         card.blockers = _dedupe_blockers(card.blockers)
         card.health_signals = _dedupe_blockers(card.health_signals)
 
@@ -1689,25 +1948,39 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
     print("  🤖  Synthesising narrative with LLM...", file=sys.stderr)
     llm_narrative = _llm_synthesize_narrative(project_cards, decisions, week_end.isoformat())
 
+    # Rule-based summaries are always computed as the fallback baseline.
+    rule_this_week = _build_this_week_summary(
+        project_cards, week_start.isoformat(), week_end.isoformat()
+    )
+    rule_next_week = _build_next_week_summary(project_cards)
+    rule_client_summary = _build_client_summary(project_cards, inactive_group)
+
     if llm_narrative:
         _apply_llm_narrative(project_cards, llm_narrative)
         top_risk = llm_narrative.get("top_risk") or _build_bottom_line(project_cards, decisions)
-        this_week = _build_this_week_summary(project_cards)
-        next_week_sum = _build_next_week_summary(project_cards)
-        client_summary = None
+        # Prefer the LLM's prose when it returned usable content; otherwise keep
+        # the rule-based baseline. This is the wiring that was previously dropped.
+        llm_this = [str(b).strip() for b in (llm_narrative.get("this_week_summary") or []) if str(b).strip()]
+        llm_next = [str(b).strip() for b in (llm_narrative.get("next_week_summary") or []) if str(b).strip()]
+        llm_client = (llm_narrative.get("client_summary") or "").strip()
+        this_week = llm_this or rule_this_week
+        next_week_sum = llm_next or rule_next_week
+        # Only trust the LLM client_summary if it uses the §Section contract the
+        # renderer parses; otherwise fall back to the structured rule-based one.
+        client_summary = llm_client if "§" in llm_client else rule_client_summary
     else:
         top_risk = _build_bottom_line(project_cards, decisions)
-        this_week = _build_this_week_summary(project_cards)
-        next_week_sum = _build_next_week_summary(project_cards)
-        client_summary = None
+        this_week = rule_this_week
+        next_week_sum = rule_next_week
+        client_summary = rule_client_summary
 
     # ── 16. Portfolio risks ─────────────────────────────────────────────────
     print("  🔍 Building portfolio risks...", file=sys.stderr)
     portfolio_risks = _build_portfolio_risks(project_cards, inactive_group)
+    data_quality_notes = _build_data_quality_notes(project_cards)
 
     # ── 17. Leadership priorities ──────────────────────────────────────────
     leadership_priorities = _build_leadership_priorities(project_cards, decisions)
-    client_summary = _build_client_summary(project_cards, inactive_group)
 
     # ── 18. Portfolio summary ────────────────────────────────────────────────
     summary = PortfolioSummary(
@@ -1740,6 +2013,7 @@ def generate_steering_report(week_ending: date | None = None) -> SteeringReport:
         score_methodology=_SCORE_METHODOLOGY,
         sources=sources,
         errors=errors,
+        data_quality_notes=data_quality_notes,
     )
 
     # ── 15. Render ──────────────────────────────────────────────────────────
@@ -1834,13 +2108,76 @@ def _update_index(output_dir: Path, report: SteeringReport) -> None:
 def send_report(report: SteeringReport, paths: dict[str, Path]) -> bool:
     """
     Send the report via configured channel.
-    Tries Gmail (HTML email) first, then Telegram.
+    Tries Gmail (HTML email), Slack, then Telegram.
     Returns True only if at least one delivery actually succeeded.
     Never raises — failures are printed to stderr.
     """
-    import os, subprocess
+    import json as _json
+    import subprocess
+    import urllib.request
 
+    def _format_week_label(iso_date: str) -> str:
+        try:
+            return date.fromisoformat(iso_date).strftime("%-d %b %Y")
+        except Exception:
+            return iso_date
+
+    def _parse_client_summary_sections(text: str | None) -> dict[str, list[str]]:
+        sections: dict[str, list[str]] = {}
+        if not text:
+            return sections
+        for block in text.strip().split("\n\n"):
+            lines = [line.strip() for line in block.strip().splitlines() if line.strip()]
+            if not lines:
+                continue
+            if lines[0].startswith("§"):
+                heading = lines[0][1:].strip()
+                sections[heading] = lines[1:]
+        return sections
+
+    def _status_emoji(status: str) -> str:
+        return {
+            "on_track": ":large_green_circle:",
+            "at_risk": ":large_orange_circle:",
+            "off_track": ":red_circle:",
+        }.get(status, ":white_circle:")
+
+    def _status_label(project: ProjectCard) -> str:
+        if project.status == "on_track":
+            return "On Track"
+        if project.status == "off_track":
+            return "Off Track · Escalate"
+        return "At Risk · Act Now"
+
+    def _project_detail_text(project: ProjectCard) -> str:
+        ms = _current_milestone(project) or {}
+        score = int(round(project.health_score))
+        progress = int(round(project.work_progress_pct))
+        timeline_bits = [f"{progress}%"]
+        if project.target_date:
+            timeline_bits.append(project.target_date)
+        if project.days_left is not None:
+            days = f"{abs(project.days_left)}d late" if project.days_left < 0 else f"{project.days_left}d"
+            timeline_bits.append(days)
+        delivered = (project.delivered_bullets or ["No delivery evidence this week"])[:3]
+        planned = (project.planned_bullets or ([project.next_week] if project.next_week else []))[:3]
+        lines = [
+            f'{_status_emoji(project.status)} *{project.name}*  {project.owner}  {_status_label(project)}  Score {score}  ' + " · ".join(timeline_bits)
+        ]
+        if delivered:
+            lines.append("Delivered:")
+            lines.extend([f"— {item.rstrip('.')}" for item in delivered[:3]])
+        if planned:
+            lines.append("Next week:")
+            lines.extend([f"— {item.rstrip('.')}" for item in planned[:3]])
+        elif ms.get("name"):
+            lines.append("Next week:")
+            lines.append(f"— Target milestone '{ms['name']}'")
+        return "\n".join(lines)
+
+    _load_local_env()
     recipients: list = cfg_get("steering.recipients") or cfg_get("email.recipients", []) or []
+    from_addr = cfg_get("steering.from") or cfg_get("email.from") or ""
     any_sent = False
 
     # ── Gmail HTML email ────────────────────────────────────────────────────
@@ -1861,7 +2198,7 @@ def send_report(report: SteeringReport, paths: dict[str, Path]) -> bool:
                 print(f"⚠️  Gmail script not found at {gmail_path} — skipping email", file=sys.stderr)
                 gmail_path = None
         if gmail_path:
-            subject = f"Engineering Update — {report.week_end}"
+            subject = f"Steering Report — {report.week_end}"
             for recipient in recipients:
                 try:
                     result = subprocess.run(
@@ -1869,6 +2206,7 @@ def send_report(report: SteeringReport, paths: dict[str, Path]) -> bool:
                             sys.executable, str(gmail_path),
                             "gmail", "send",
                             "--to", recipient,
+                            "--from", from_addr,
                             "--subject", subject,
                             "--html", str(html_path),
                         ],
@@ -1881,6 +2219,176 @@ def send_report(report: SteeringReport, paths: dict[str, Path]) -> bool:
                         print(f"⚠️  Gmail send failed for {recipient}: {result.stderr[:200]}", file=sys.stderr)
                 except Exception as e:
                     print(f"⚠️  Gmail error for {recipient}: {e}", file=sys.stderr)
+
+    # ── Telegram Markdown fallback ──────────────────────────────────────────
+    slack_webhook = (
+        os.getenv("SLACK_WEBHOOK_URL")
+        or cfg_get("steering.webhook_url")
+        or cfg_get("reporting.webhook_url")
+    )
+    if slack_webhook:
+        try:
+            summary = report.portfolio_summary.top_risk or "Steering report generated."
+            week_label = _format_week_label(report.week_end)
+            at_risk_projects = [p for p in report.projects if p.status in {"at_risk", "off_track"}]
+            on_track_projects = [p for p in report.projects if p.status == "on_track"]
+            sections = _parse_client_summary_sections(report.client_summary)
+            delivered_lines = sections.get("Delivered", [])[:3]
+            next_lines = sections.get("Committed Next", [])[:3]
+            risk_lines = report.portfolio_summary.portfolio_risks[:3] or sections.get("Risks", [])[:3]
+            milestones_due = 0
+            try:
+                week_end_dt = date.fromisoformat(report.week_end)
+                cutoff = week_end_dt + timedelta(days=14)
+                for project in report.projects:
+                    for milestone in project.milestones:
+                        target = milestone.get("target_date")
+                        if not target:
+                            continue
+                        target_dt = date.fromisoformat(target)
+                        if week_end_dt <= target_dt <= cutoff:
+                            milestones_due += 1
+            except Exception:
+                milestones_due = 0
+
+            attention_count = report.portfolio_summary.at_risk + report.portfolio_summary.off_track
+            severity_lines = []
+            if at_risk_projects:
+                severity_lines.append(
+                    f":large_orange_circle: Act Now: " + "  ".join(p.name for p in at_risk_projects[:5])
+                )
+            if on_track_projects:
+                severity_lines.append(
+                    f":large_green_circle: On Track: " + "  ".join(p.name for p in on_track_projects[:5])
+                )
+            blocks = [
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*Steering Report — {week_label}*\n{summary}",
+                    },
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": (
+                            "*Portfolio Health*\n"
+                            f":large_orange_circle: {report.portfolio_summary.on_track}/{report.portfolio_summary.total_projects} projects on track   "
+                            f":red_circle: {attention_count} need action   "
+                            f":white_circle: {report.portfolio_summary.decisions_needed} decisions needed   "
+                            f":white_circle: {milestones_due} milestones in 14d"
+                        ),
+                    },
+                },
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": "*Projects by severity*\n" + "\n".join(severity_lines or [":white_circle: No project groupings available"]),
+                    },
+                },
+            ]
+            if risk_lines:
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*Top Risks*\n" + "\n".join(
+                                f"{idx}. {line.rstrip('.')}" for idx, line in enumerate(risk_lines[:3], start=1)
+                            ),
+                        },
+                    }
+                )
+            if delivered_lines:
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*Delivered This Week*\n" + "\n".join(f"• {line}" for line in delivered_lines),
+                        },
+                    }
+                )
+            if next_lines:
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*Committed Next Week*\n" + "\n".join(f"• {line}" for line in next_lines),
+                        },
+                    }
+                )
+            detail_texts = [_project_detail_text(project) for project in at_risk_projects[:5]]
+            if detail_texts:
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*Project Detail*\n" + "\n\n".join(detail_texts),
+                        },
+                    }
+                )
+            if on_track_projects:
+                on_track_lines = []
+                for project in on_track_projects[:3]:
+                    delivered = (project.delivered_bullets or ["Progressing as planned"])[0].rstrip(".")
+                    on_track_lines.append(
+                        f":large_green_circle: *{project.name}* · {int(round(project.work_progress_pct))}% · score {int(round(project.health_score))} — {delivered}"
+                    )
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*On Track*\n" + "\n".join(on_track_lines),
+                        },
+                    }
+                )
+            upcoming = []
+            try:
+                week_end_dt = date.fromisoformat(report.week_end)
+                for project in report.projects:
+                    for milestone in project.milestones:
+                        target = milestone.get("target_date")
+                        if target and target >= report.week_start:
+                            upcoming.append((target, project, milestone.get("name", "")))
+                upcoming.sort(key=lambda item: item[0])
+            except Exception:
+                upcoming = []
+            if upcoming:
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": "*Milestone Radar*\n" + "\n".join(
+                                f"{_status_emoji(project.status)} {target} {project.name} — {milestone_name}"
+                                for target, project, milestone_name in upcoming[:6]
+                            ),
+                        },
+                    }
+                )
+            payload = {
+                "text": f"Steering Report — {report.week_end}: {summary}",
+                "blocks": blocks,
+            }
+            req = urllib.request.Request(
+                slack_webhook,
+                data=_json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                if 200 <= getattr(resp, "status", 200) < 300:
+                    print("💬 Sent via Slack", file=sys.stderr)
+                    any_sent = True
+        except Exception as e:
+            print(f"⚠️  Slack send failed: {e}", file=sys.stderr)
 
     # ── Telegram Markdown fallback ──────────────────────────────────────────
     token = os.getenv("TELEGRAM_BOT_TOKEN")
@@ -1907,8 +2415,8 @@ def send_report(report: SteeringReport, paths: dict[str, Path]) -> bool:
             print(f"⚠️  Telegram error: {e}", file=sys.stderr)
 
     if not any_sent:
-        if not recipients and not (os.getenv("TELEGRAM_BOT_TOKEN")):
-            print("⚠️  No delivery channels configured — set steering.recipients or TELEGRAM_BOT_TOKEN",
+        if not recipients and not slack_webhook and not os.getenv("TELEGRAM_BOT_TOKEN"):
+            print("⚠️  No delivery channels configured — set steering.recipients, steering.webhook_url, or TELEGRAM_BOT_TOKEN",
                   file=sys.stderr)
         else:
             print("⚠️  All delivery attempts failed — report saved locally only", file=sys.stderr)
@@ -1925,10 +2433,11 @@ if __name__ == "__main__":
     parser.add_argument("--json", action="store_true", help="Output raw JSON to stdout")
     parser.add_argument("--send", action="store_true", help="Send via email/Telegram after saving")
     parser.add_argument("--week-ending", help="ISO date e.g. 2026-05-30")
+    parser.add_argument("--project", help="Generate report for a single project by name (case-insensitive)")
     args = parser.parse_args()
 
     week_end_date = date.fromisoformat(args.week_ending) if args.week_ending else None
-    report = generate_steering_report(week_end_date)
+    report = generate_steering_report(week_end_date, only_project=args.project)
     paths = save_report(report)
 
     if args.send:

@@ -143,11 +143,17 @@ class ProjectCard:
     # Trend — populated by comparing with previous week's report
     score_trend: ScoreTrend | None = None
 
+    # Goal / objective — what this project is for, summarised against (not just activity)
+    objective: str | None = None          # project description / goal statement from Linear
+    goal_progress: str | None = None      # one-line "where we stand vs the objective"
+    current_milestone: dict | None = None # the milestone currently being worked toward
+
     # Timeline
     target_date: str | None = None       # ISO date
     start_date: str | None = None        # ISO date
     days_left: int | None = None
-    milestones: list[dict] = field(default_factory=list)  # [{name, target_date}]
+    # milestones: [{name, target_date, description, issues_total, issues_done, progress_pct}]
+    milestones: list[dict] = field(default_factory=list)
     time_progress_pct: float = 0.0       # % of calendar time elapsed
     work_progress_pct: float = 0.0       # % of issues completed
     timeline_position: TimelinePosition = "on_plan"
@@ -244,6 +250,9 @@ class SteeringReport:
 
     sources: list[str] = field(default_factory=list)  # which signals were available
     errors: list[str] = field(default_factory=list)   # non-fatal collection failures
+    # Tracking-hygiene observations that limit report precision (e.g. milestones with
+    # no issues linked). Rendered as a subtle caption, not a delivery risk.
+    data_quality_notes: list[str] = field(default_factory=list)
 
     # Rendered outputs (populated in Phase 5)
     rendered_html: str | None = None

@@ -369,10 +369,11 @@ def linear_project_health(days: int = 30) -> dict:
       projects(first: 50) {
         nodes {
           id name state
+          description
           lead { name email }
           targetDate startDate
           projectMilestones {
-            nodes { name targetDate }
+            nodes { id name targetDate description }
           }
         }
       }
@@ -393,6 +394,7 @@ def linear_project_health(days: int = 30) -> dict:
               identifier title state { name type }
               createdAt updatedAt completedAt
               priority assignee { name }
+              projectMilestone { id }
             }
           }
         }
@@ -485,10 +487,36 @@ def linear_project_health(days: int = 30) -> dict:
             risks.append("Low velocity - less than 0.5 issues/day")
 
         raw_milestones = (project.get("projectMilestones") or {}).get("nodes", [])
-        milestones = [
-            {"name": m.get("name"), "target_date": m.get("targetDate")}
-            for m in raw_milestones if m.get("targetDate")
-        ]
+        # Per-milestone scope progress, derived from the project's own issues
+        # (grouped by projectMilestone.id). Nesting issues under projectMilestones
+        # in the GraphQL query exceeds Linear's complexity limit, so we group here.
+        ms_counts: dict[str, dict[str, int]] = {}
+        for i in issues:
+            ms = i.get("projectMilestone") or {}
+            ms_id = ms.get("id")
+            if not ms_id:
+                continue
+            bucket = ms_counts.setdefault(ms_id, {"total": 0, "done": 0})
+            bucket["total"] += 1
+            if i.get("state", {}).get("type") == "completed":
+                bucket["done"] += 1
+
+        milestones = []
+        for m in raw_milestones:
+            if not m.get("targetDate"):
+                continue
+            counts = ms_counts.get(m.get("id"), {"total": 0, "done": 0})
+            ms_total = counts["total"]
+            ms_done = counts["done"]
+            milestones.append({
+                "name": m.get("name"),
+                "target_date": m.get("targetDate"),
+                "description": (m.get("description") or "").strip()[:240] or None,
+                "issues_total": ms_total,
+                "issues_done": ms_done,
+                # % of this milestone's scope completed (None when no issues attached)
+                "progress_pct": round(ms_done / ms_total * 100, 1) if ms_total else None,
+            })
         open_issues = [
             i for i in issues
             if i.get("state", {}).get("type") in {"started", "unstarted", "backlog"}
@@ -506,6 +534,9 @@ def linear_project_health(days: int = 30) -> dict:
             "name": project.get("name"),
             "id": project.get("id"),
             "state": project.get("state"),
+            # Objective: the project's own description — the goal statement the
+            # steering report should summarise progress *against*, not just activity.
+            "objective": (project.get("description") or "").strip()[:600] or None,
             "lead": (project.get("lead") or {}).get("name", "Unassigned"),
             "target_date": project.get("targetDate"),
             "start_date": project.get("startDate"),

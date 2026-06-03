@@ -133,12 +133,14 @@ def list_gmail_messages(max_results=10, query=''):
     return detailed_messages
 
 
-def send_gmail_message(to: str, subject: str, body: str = '', html: str = ''):
+def send_gmail_message(to: str, subject: str, body: str = '', html: str = '', from_addr: str = ''):
     """Send a Gmail message with optional HTML body."""
     creds = get_credentials()
     service = build('gmail', 'v1', credentials=creds)
 
     message = EmailMessage()
+    if from_addr:
+        message['From'] = from_addr
     message['To'] = to
     message['Subject'] = subject
 
@@ -198,6 +200,7 @@ def main():
             max_results = 10
             query = ''
             to = ''
+            from_addr = ''
             subject = ''
             body = ''
             html = ''
@@ -212,6 +215,9 @@ def main():
                     i += 2
                 elif sys.argv[i] == '--to' and i + 1 < len(sys.argv):
                     to = sys.argv[i + 1]
+                    i += 2
+                elif sys.argv[i] == '--from' and i + 1 < len(sys.argv):
+                    from_addr = sys.argv[i + 1]
                     i += 2
                 elif sys.argv[i] == '--subject' and i + 1 < len(sys.argv):
                     subject = sys.argv[i + 1]
@@ -231,7 +237,7 @@ def main():
                 if not to or not subject:
                     print("gmail send requires --to and --subject", file=sys.stderr)
                     sys.exit(1)
-                result = send_gmail_message(to=to, subject=subject, body=body, html=html)
+                result = send_gmail_message(to=to, subject=subject, body=body, html=html, from_addr=from_addr)
                 print(json.dumps({"status": "sent", "id": result.get("id"), "to": to}))
             else:
                 messages = list_gmail_messages(max_results, query)

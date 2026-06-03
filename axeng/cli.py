@@ -1305,70 +1305,73 @@ def steering(
 
 @app.command()
 def schedule(
-    install: bool = typer.Option(False, "--install", help="Install weekly cron job for steering report"),
+    install: bool = typer.Option(False, "--install", help="Install weekly cron job (steering report)"),
     uninstall: bool = typer.Option(False, "--uninstall", help="Remove steering report cron job"),
     status: bool = typer.Option(False, "--status", help="Show current schedule"),
+    engineering: bool = typer.Option(False, "--engineering", help="Schedule engineering report instead of steering"),
 ):
-    """Manage weekly automation — install/remove the Friday steering report cron job."""
-    if not any([install, uninstall, status]):
-        console.print("[yellow]Usage:[/yellow]")
-        console.print("  axeng schedule --install    Install Friday 7am cron job")
-        console.print("  axeng schedule --uninstall  Remove the cron job")
-        console.print("  axeng schedule --status     Show current schedule")
-        return
+    """Manage weekly automation — schedule the Friday steering or engineering report."""
+    _CRON_TAG_STEERING = "# axeng-steering-report"
+    _CRON_TAG_ENGINEERING = "# axeng-engineering-report"
 
-    _CRON_TAG = "# axeng-steering-report"
     axeng_bin = subprocess.run(["which", "axeng"], capture_output=True, text=True).stdout.strip()
     if not axeng_bin:
         axeng_bin = sys.executable.replace("python3", "axeng").replace("python", "axeng")
 
     try:
-        # Read current crontab (empty string if none)
-        current = subprocess.run(
-            ["crontab", "-l"], capture_output=True, text=True
-        )
+        current = subprocess.run(["crontab", "-l"], capture_output=True, text=True)
         crontab_lines = current.stdout.splitlines() if current.returncode == 0 else []
 
+        if engineering:
+            tag = _CRON_TAG_ENGINEERING
+            report_type = "engineering"
+            config_key = "reporting"
+            cmd_suffix = "--weekly --send"
+        else:
+            tag = _CRON_TAG_STEERING
+            report_type = "steering"
+            config_key = "steering"
+            cmd_suffix = "--steering --send"
+
         if status:
-            existing = [l for l in crontab_lines if _CRON_TAG in l]
+            existing = [l for l in crontab_lines if tag in l or _CRON_TAG_STEERING in l or _CRON_TAG_ENGINEERING in l]
             if existing:
-                console.print(f"[green]✓[/green] Steering report scheduled:")
+                console.print(f"[green]✓[/green] Scheduled reports:")
                 for line in existing:
                     console.print(f"  [dim]{line}[/dim]")
             else:
-                console.print("[yellow]No steering report schedule found.[/yellow]")
-                console.print("Run  axeng schedule --install  to set one up.")
+                console.print("[yellow]No scheduled reports found.[/yellow]")
+                console.print("Run  axeng schedule --install  to schedule the steering report.")
+                console.print("Run  axeng schedule --install --engineering  to schedule the engineering report.")
             return
 
         if uninstall:
-            new_lines = [l for l in crontab_lines if _CRON_TAG not in l]
+            new_lines = [l for l in crontab_lines if tag not in l]
             if len(new_lines) == len(crontab_lines):
-                console.print("[yellow]No steering report cron job found — nothing to remove.[/yellow]")
+                console.print(f"[yellow]No {report_type} cron job found — nothing to remove.[/yellow]")
                 return
             _write_crontab(new_lines)
-            console.print("[green]✓[/green] Steering report cron job removed.")
+            console.print(f"[green]✓[/green] {report_type.title()} report cron job removed.")
             return
 
         if install:
-            # Read schedule from config (weekday 0=Mon…4=Fri, default Friday=4)
             sys.path.insert(0, str(Path(__file__).parent))
             from config import get as cfg_get
-            weekday = cfg_get("steering.weekday", 4)   # 0=Mon, 4=Fri
-            timezone = cfg_get("steering.timezone", "")
-            # Map weekday int to cron day-of-week (1=Mon…5=Fri in cron)
-            cron_dow = weekday + 1  # Linear 0-indexed Monday → cron 1-indexed Monday
+            weekday = cfg_get(f"{config_key}.weekday", 4)
+            timezone = cfg_get(f"{config_key}.timezone", "")
+            cron_dow = weekday + 1
             cron_line = (
-                f"0 7 * * {cron_dow} {axeng_bin} report --steering --send"
-                f"  {_CRON_TAG}"
+                f"0 7 * * {cron_dow} {axeng_bin} report {cmd_suffix}"
+                f"  {tag}"
             )
-            # Remove any existing steering line, then append new one
-            new_lines = [l for l in crontab_lines if _CRON_TAG not in l]
+            # Remove any existing cron line for this report type, then append new one
+            new_lines = [l for l in crontab_lines if tag not in l]
             new_lines.append(cron_line)
             _write_crontab(new_lines)
 
             day_names = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
             day_name = day_names[weekday] if weekday < len(day_names) else f"day {weekday}"
-            console.print(f"[green]✓[/green] Steering report scheduled every {day_name} at 07:00.")
+            console.print(f"[green]✓[/green] {report_type.title()} report scheduled every {day_name} at 07:00.")
             console.print(f"[dim]{cron_line}[/dim]")
             if timezone:
                 console.print(f"[dim]Note: cron runs in system timezone, not {timezone}. Adjust the hour if needed.[/dim]")

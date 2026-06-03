@@ -201,8 +201,8 @@ Axeng produces two separate weekly reports from the same data sources.
 Team-facing summary for engineers and EMs. Covers sprint health, DORA metrics, PR activity, individual contributions, and OOO.
 
 ```bash
-axeng report          # Generate and print
-axeng report --send   # Generate and send via Telegram/email
+axeng report --weekly          # Generate and print
+axeng report --weekly --send   # Generate and send via Telegram/Email/Slack
 ```
 
 Configured under `reporting:` in `config/config.yaml`:
@@ -215,6 +215,7 @@ reporting:
   show_mvp: true          # Include top-contributor podium
   show_roadmap_analysis: true
   post_linear_updates: true  # Write status updates back to Linear projects
+  # webhook_url: "https://hooks.slack.com/..."  # Slack delivery (auto-sent with --send)
 
 email:
   recipients:             # Engineering report recipients
@@ -225,24 +226,28 @@ email:
 
 ### Steering Report — `axeng steering`
 
-CEO-facing executive document. Covers delivered outcomes, milestone progress, confidence, blockers, and next-week plan. Uses the same `linear.projects` list.
+CEO-facing executive document. Produces a single-page snapshot of portfolio health: executive summary, portfolio outcomes, leadership attention, milestone radar, and per-project detail cards with delivered outcomes, risks, and next-week plans.
 
 ```bash
-axeng steering          # Generate, save, and print Markdown
-axeng steering --send   # Generate and email to steering.recipients
-axeng steering --json   # Output raw JSON (for API / downstream tooling)
-axeng steering --week-ending 2026-06-06  # Generate for a specific week
+axeng steering                            # Generate, save, and print Markdown
+axeng steering --send                     # Deliver via Gmail + Telegram + Slack
+axeng steering --project "Compass"        # Single project
+axeng steering --week-ending 2026-06-06   # Specific week
+axeng steering --json                     # Raw JSON output
 ```
 
 Configured under `steering:` in `config/config.yaml`:
 
 ```yaml
 steering:
-  recipients:             # Steering report recipients — independent of email.recipients
+  recipients:               # Steering report recipients — independent of email.recipients
     - "ceo@mycompany.com"
   output_dir: "~/.axeng/reports/steering"   # JSON + MD + HTML saved here
+  weekday: 4                # Friday (0=Mon … 4=Fri), used by axeng schedule --install
+  timezone: "Europe/Lisbon"
+  # webhook_url: "https://hooks.slack.com/..."  # Slack delivery (auto-sent with --send)
 
-  brand:                  # Optional — customise the email header
+  brand:                    # Optional — customise the email header
     company: "Acme Corp"
     tagline:  "Move fast, stay safe"
     location: "San Francisco"
@@ -252,17 +257,27 @@ steering:
     # danger:  "#dc2626"   # Off Track / Blocked
 ```
 
-#### What the steering report shows per project
+#### Report structure
+
+| # | Section | Content |
+|---|---------|---------|
+| 1 | **Executive Summary** | 5 bullets grouped by Critical / Warning / Positive, plus portfolio health tier |
+| 2 | **Major Outcomes** | What shipped across all projects this week |
+| 3 | **Leadership Attention** | Project / Why / Ask table — only projects needing intervention |
+| 4 | **Portfolio Table** | Project | Health | Milestone | Confidence |
+| 5 | **Next Milestones** | 45-day radar of upcoming milestones |
+| 6 | **Project Details** | Full cards per project: delivered outcomes, evidence counts, why-at-risk (if applicable), next-week plan |
+
+#### What each project card shows
 
 | Section | Source |
 |---------|--------|
-| **Delivered** | Linear issues completed this week + GitHub issues closed + merged PRs + commits (grouped by theme) |
-| **Next Week** | Granola meeting commitments + Linear in-progress / focus issues + upcoming milestones |
-| **Status / Confidence** | Scoring model (completion rate, velocity, timeline gap, blockers) |
-| **Risks & Signals** | Stale issues, velocity gaps, meeting transcript risk mentions |
-| **Decisions Needed** | Auto-detected from ETA risk, blockers, and unowned critical issues |
-
-On Track projects appear as compact cards (delivered + next week only). At Risk and Off Track projects get full detail cards.
+| **This Week** | Delivered bullets from Linear + GitHub Issues + PRs + commits (grouped by theme) |
+| **Evidence** | Issue counts, PR counts, commit counts (only shown when outcomes exist) |
+| **Why At Risk** | Specific reasons — velocity gaps, stale issues, deadline risks (at-risk/off-track only) |
+| **Next Week** | Granola meeting commitments + Linear in-progress / focus issues |
+| **Milestone** | Current active milestone with target date |
+| **Progress** | Completion % · days remaining |
 
 #### Controlling which projects appear in steering
 
@@ -276,6 +291,41 @@ linear:
 ```
 
 If you need a project in one report but not the other, there is no built-in filter today — include/exclude at the `project_ids` level affects both.
+
+#### Delivery channels
+
+`axeng steering --send` fires all configured channels in sequence — Gmail HTML → Telegram Markdown → Slack Block Kit. Each channel is independent; failure in one does not stop the others. Reports are always saved to disk regardless of delivery success.
+
+---
+
+## 📣 Slack Integration
+
+Axeng sends steering and weekly reports to Slack as part of the normal `--send` delivery path, alongside email and Telegram. The Slack webhook is config-driven — if configured, it fires automatically.
+
+### Setup
+
+1. **Create Slack webhook**: Go to https://api.slack.com/apps → Your App → **Incoming Webhooks** → **Add New Webhook** → Select channel → Copy URL
+
+2. **Configure Axeng**: Add to `config/config.yaml`:
+   ```yaml
+   steering:
+    # webhook_url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+
+   reporting:
+    # webhook_url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+   ```
+
+   Or set environment variable:
+   ```bash
+   export SLACK_WEBHOOK_URL="https://hooks.slack.com/services/XXX/YYY/ZZZ"
+   ```
+
+3. **Send reports** (Slack included automatically when webhook is configured):
+   ```bash
+   axeng report --weekly --send
+   axeng steering --send
+   axeng steering --send --project "Compass"
+   ```
 
 ---
 
@@ -343,7 +393,10 @@ axeng/
 │       ├── dora_metrics.py       # DORA metrics
 │       ├── team_query.py         # Team membership queries
 │       ├── sprint_health.py      # Sprint scoring engine
-│       ├── weekly_report.py      # Report generation
+│       ├── weekly_report.py      # Engineering report generation
+│       ├── steering_report.py     # CEO steering report pipeline
+│       ├── steering_render.py     # HTML + Markdown renderer
+│       ├── steering_schema.py     # Typed dataclasses
 │       ├── vacations.py          # Vacation management
 │       ├── offboarding.py        # Offboarding (dry-run + exec)
 │       └── linear_vacations.sh   # Vacation bash helpers
@@ -351,7 +404,8 @@ axeng/
 ├── config/
 │   └── config.yaml.example       # Configuration template
 ├── prompts/
-│   └── engineering-manager-code-act.md  # Axeng persona prompt
+│   ├── engineering-manager-code-act.md  # Axeng persona prompt
+│   └── steering-report-generation-rules.md  # CEO report synthesis rules
 ├── docker/
 │   ├── Dockerfile
 │   └── docker-compose.yml

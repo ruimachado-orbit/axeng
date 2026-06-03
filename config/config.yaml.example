@@ -96,8 +96,9 @@ linear:
 
 # ───────────────────────────────────────────────────────────────
 # CEO STEERING REPORT
-# Weekly executive document — lands in the CEO's inbox every Friday.
+# Weekly executive document — lands in the CEO's inbox.
 # Generated from Linear + GitHub Issues + Granola meeting notes.
+# Scheduled independently from the engineering report.
 # ───────────────────────────────────────────────────────────────
 steering:
   # Who receives the email (CEO, EA, or both)
@@ -107,26 +108,44 @@ steering:
   # Day of week to generate and send (0=Monday, 4=Friday)
   weekday: 4
 
-  # Timezone for week boundary
+  # Timezone for week boundary calculations
   timezone: "Europe/Lisbon"
 
-  # Where to save generated JSON + HTML reports
+  # Where to save generated JSON + MD + HTML reports
   output_dir: "~/.axeng/reports/steering"
+
+  # Slack webhook URL for sending reports to Slack
+  # Sent as part of --send alongside email and Telegram
+  # webhook_url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
+
+  # Optional — customise the email header and colour scheme
+  # brand:
+  #   company: "Acme Corp"
+  #   tagline:  "Move fast, stay safe"
+  #   location: "San Francisco"
+  #   success: "#16a34a"   # On Track
+  #   warning: "#d97706"   # At Risk
+  #   danger:  "#dc2626"   # Off Track / Blocked
 
 
 # ───────────────────────────────────────────────────────────────
-# REPORTING
+# ENGINEERING REPORT
+# Weekly team-facing summary for engineers and EMs.
+# Scheduled independently from the steering report.
 # ───────────────────────────────────────────────────────────────
 reporting:
   # Day of week that the report runs (0=Monday, 4=Friday)
-  # The report covers the previous Sat–Fri week
   weekday: 4
 
   # Timezone for week boundary calculations
   timezone: "Europe/Lisbon"
 
-  # Output directory for saved HTML reports
-  output_dir: "~/.axeng/scripts/team-intel/reports"
+  # Output directory for saved reports
+  output_dir: "~/.axeng/reports/weekly"
+
+  # Slack webhook URL for sending the engineering report to Slack
+  # Sent as part of --send alongside Telegram
+  # webhook_url: "https://hooks.slack.com/services/XXX/YYY/ZZZ"
 
   # Include the MVP podium section in the report
   show_mvp: true

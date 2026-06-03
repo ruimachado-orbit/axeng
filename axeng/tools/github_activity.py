@@ -118,27 +118,23 @@ def github_activity(person: str = None, days: int = 7) -> dict:
         except Exception:
             pass
 
-    # Fetch merged PRs
+    # Fetch merged PRs and reviews — only meaningful for a specific person.
+    # Team-wide PR titles are fetched per active repo by commits_summary_from_activity.
     if github_user:
         pr_query = f"author:{github_user} is:pr merged:>={since}"
-    else:
-        pr_query = f"is:pr merged:>={since}"
-    
-    prs = gh_api(f"search/issues?q={pr_query}&per_page=50&sort=updated")
-    if isinstance(prs, dict) and "items" in prs:
-        for pr in prs["items"][:20]:
-            repo_name = pr.get("repository_url", "").split("/")[-1]
-            result["pulls"].append({
-                "number": pr.get("number"),
-                "title": pr.get("title"),
-                "repo": repo_name,
-                "url": pr.get("html_url"),
-                "merged_at": pr.get("closed_at"),
-                "labels": [l["name"] for l in pr.get("labels", [])]
-            })
+        prs = gh_api(f"search/issues?q={pr_query}&per_page=50&sort=updated")
+        if isinstance(prs, dict) and "items" in prs:
+            for pr in prs["items"][:20]:
+                repo_name = pr.get("repository_url", "").split("/")[-1]
+                result["pulls"].append({
+                    "number": pr.get("number"),
+                    "title": pr.get("title"),
+                    "repo": repo_name,
+                    "url": pr.get("html_url"),
+                    "merged_at": pr.get("closed_at"),
+                    "labels": [l["name"] for l in pr.get("labels", [])]
+                })
 
-    # Fetch reviews
-    if github_user:
         review_query = f"reviewer:{github_user} is:pr updated:>={since}"
         reviews = gh_api(f"search/issues?q={review_query}&per_page=30")
         if isinstance(reviews, dict) and "items" in reviews:
@@ -212,6 +208,51 @@ def github_commits_summary(days: int = 7) -> dict:
         "days": days,
         "by_repo": by_repo
     }
+
+
+def commits_summary_from_activity(activity: dict, days: int = 7) -> dict:
+    """
+    Derive a github_commits_summary-compatible by_repo dict from an already-fetched
+    github_activity result. Avoids re-fetching commits for the same repos.
+    Only fetches merged PR titles per repo (not covered by github_activity).
+    """
+    since = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    since_dt = datetime.strptime(since, "%Y-%m-%d")
+
+    # Group flat commits by repo
+    by_repo: dict[str, dict] = {}
+    for c in activity.get("commits", []):
+        repo = c.get("repo", "")
+        if not repo:
+            continue
+        if repo not in by_repo:
+            by_repo[repo] = {"count": 0, "recent_messages": [], "recent_pr_titles": []}
+        by_repo[repo]["count"] += 1
+        msg = c.get("message", "").strip()
+        if msg and len(by_repo[repo]["recent_messages"]) < 30:
+            by_repo[repo]["recent_messages"].append(msg)
+
+    # Fetch merged PR titles per active repo (single extra call per repo)
+    for repo in list(by_repo.keys()):
+        try:
+            pulls = gh_api(f"repos/{repo}/pulls?state=closed&sort=updated&direction=desc&per_page=30")
+            if isinstance(pulls, list):
+                for pr in pulls:
+                    merged_at = pr.get("merged_at")
+                    if not merged_at:
+                        continue
+                    try:
+                        merged_dt = datetime.fromisoformat(merged_at.replace("Z", "+00:00")).replace(tzinfo=None)
+                    except ValueError:
+                        continue
+                    if merged_dt >= since_dt:
+                        title = (pr.get("title") or "").strip()
+                        if title:
+                            by_repo[repo]["recent_pr_titles"].append(title)
+        except Exception:
+            pass
+
+    return {"tool": "github_commits_summary", "days": days, "by_repo": by_repo}
 
 
 def github_person_summary(person: str, days: int = 7) -> dict:

@@ -1165,24 +1165,31 @@ def dora(days: int = typer.Option(30, "--days", "-d", help="Days to analyze")):
 def report(
     weekly: bool = typer.Option(False, "--weekly", help="Generate weekly engineering report"),
     steering: bool = typer.Option(False, "--steering", help="Generate steering document"),
-    send: bool = typer.Option(False, "--send", help="Send report via Email/Telegram after generating"),
+    send: bool = typer.Option(False, "--send", help="Send report via Email/Telegram/Slack after generating"),
+    project: str = typer.Option(None, "--project", help="Generate report for a single project by name"),
     output_json: bool = typer.Option(False, "--json", help="Print raw JSON to stdout"),
     week_ending: str = typer.Option(None, "--week-ending", help="ISO date for steering report e.g. 2026-05-30"),
 ):
     """Generate reports — weekly engineering summary or steering document."""
     if steering:
-        _run_steering_report(send=send, output_json=output_json, week_ending=week_ending)
+        _run_steering_report(
+            send=send, project=project,
+            output_json=output_json, week_ending=week_ending
+        )
     elif weekly:
         _run_weekly_report(send=send)
     else:
         console.print("[yellow]Usage:[/yellow]")
         console.print("  axeng report --weekly          Weekly engineering report")
-        console.print("  axeng report --steering        steering document")
+        console.print("  axeng report --weekly --send   Generate + send to configured channels")
+        console.print("  axeng report --steering        Steering document")
         console.print("  axeng report --steering --send Generate + send to recipients")
+        console.print("  axeng report --steering --project <name> Generate for single project")
 
 
 def _run_steering_report(
     send: bool = False,
+    project: str | None = None,
     output_json: bool = False,
     week_ending: str | None = None,
 ) -> None:
@@ -1195,16 +1202,19 @@ def _run_steering_report(
 
         if send:
             cmd.append("--send")
+        if project:
+            cmd.extend(["--project", project])
         if output_json:
             cmd.append("--json")
         if week_ending:
             cmd.extend(["--week-ending", week_ending])
 
+        timeout_seconds = int(os.getenv("AXENG_STEERING_REPORT_TIMEOUT", "300"))
         result = subprocess.run(
             cmd,
             capture_output=True,
             text=True,
-            timeout=180,
+            timeout=timeout_seconds,
             env={**os.environ, "AXENG_HOME": axeng_home},
         )
 
@@ -1242,6 +1252,7 @@ def _run_weekly_report(send: bool = False) -> None:
 
     try:
         axeng_home = os.getenv("AXENG_HOME", str(Path.home() / ".axeng"))
+        timeout_seconds = int(os.getenv("AXENG_WEEKLY_REPORT_TIMEOUT", "300"))
         cmd = [sys.executable, str(Path(__file__).parent / "tools" / "weekly_report.py")]
 
         if send:
@@ -1251,7 +1262,7 @@ def _run_weekly_report(send: bool = False) -> None:
             cmd,
             capture_output=True,
             text=True,
-            timeout=120,
+            timeout=timeout_seconds,
             env={**os.environ, "AXENG_HOME": axeng_home},
         )
 
@@ -1263,13 +1274,33 @@ def _run_weekly_report(send: bool = False) -> None:
                 if line.strip():
                     console.print(f"[dim]{line}[/dim]")
 
+        if result.returncode != 0:
+            console.print(f"[red]Error:[/red] weekly report exited with code {result.returncode}")
+            return
+
         if send:
             console.print("\n[green]✓[/green] Report sent!")
 
     except subprocess.TimeoutExpired:
-        console.print("[red]Timeout:[/red] Report generation taking too long.")
+        console.print(
+            "[red]Timeout:[/red] Weekly report exceeded the limit. "
+            "Increase AXENG_WEEKLY_REPORT_TIMEOUT if this is expected."
+        )
     except Exception as e:
         console.print(f"[red]Error:[/red] {e}")
+
+
+@app.command()
+def steering(
+    project: str = typer.Argument(None, help="Generate report for a single project by name"),
+    send: bool = typer.Option(False, "--send", help="Send via Email/Telegram/Slack"),
+    week_ending: str = typer.Option(None, "--week-ending", help="ISO date e.g. 2026-05-30"),
+):
+    """Generate steering report (shortcut for axeng report --steering)"""
+    _run_steering_report(
+        send=send, project=project,
+        output_json=False, week_ending=week_ending
+    )
 
 
 @app.command()
